@@ -1,4 +1,3 @@
-
 /**
  * Tasks Timeline - Dataview View
  * 
@@ -8,11 +7,14 @@
  * ```
  */
 
+// Identificador único para esta instancia
+const timelineId = 'tasks-timeline-' + Date.now();
+
 // CSS embebido directamente en el código
-const cssId = 'tasks-timeline-css-v7';
+const cssId = 'tasks-timeline-css-v14';
 
 // Eliminar versiones antiguas
-['tasks-timeline-css', 'tasks-timeline-css-v2', 'tasks-timeline-css-v3', 'tasks-timeline-css-v4', 'tasks-timeline-css-v5', 'tasks-timeline-css-v6'].forEach(oldId => {
+['tasks-timeline-css', 'tasks-timeline-css-v2', 'tasks-timeline-css-v3', 'tasks-timeline-css-v4', 'tasks-timeline-css-v5', 'tasks-timeline-css-v6', 'tasks-timeline-css-v7', 'tasks-timeline-css-v8', 'tasks-timeline-css-v9', 'tasks-timeline-css-v10', 'tasks-timeline-css-v11', 'tasks-timeline-css-v12', 'tasks-timeline-css-v13'].forEach(oldId => {
     const oldStyle = document.getElementById(oldId);
     if (oldStyle) oldStyle.remove();
 });
@@ -57,6 +59,8 @@ if (!document.getElementById(cssId)) {
     border: 2px solid var(--background-modifier-border);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
 }
 
 .day-container:hover {
@@ -97,6 +101,7 @@ if (!document.getElementById(cssId)) {
     margin-bottom: 16px;
     padding-bottom: 12px;
     border-bottom: 2px solid var(--background-modifier-border);
+    flex-shrink: 0;
 }
 
 .day-label {
@@ -114,10 +119,12 @@ if (!document.getElementById(cssId)) {
 }
 
 .tasks-list {
-    min-height: 150px;
+    flex: 1;
+    min-height: 200px;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    overflow-y: auto;
 }
 
 .tasks-list.droppable {
@@ -146,7 +153,7 @@ if (!document.getElementById(cssId)) {
     border-radius: 8px;
     padding: 10px;
     cursor: grab;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
@@ -193,6 +200,26 @@ if (!document.getElementById(cssId)) {
     text-decoration: line-through;
     color: var(--text-muted);
     opacity: 0.7;
+}
+
+.task-cancel-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.task-cancel-btn:hover {
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6464;
 }
 
 .task-file-info {
@@ -263,6 +290,23 @@ if (!document.getElementById(cssId)) {
     background: var(--text-muted);
 }
 
+.tasks-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.tasks-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tasks-list::-webkit-scrollbar-thumb {
+    background: var(--background-modifier-border);
+    border-radius: 3px;
+}
+
+.tasks-list::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
 @media (max-width: 768px) {
     .timeline-main {
         flex-direction: column;
@@ -286,16 +330,68 @@ const config = {
 
 class TasksTimeline {
     constructor(container, app, dv, config) {
-        this.container = container;
+        this.dvContainer = container;
         this.app = app;
         this.dv = dv;
         this.config = config;
         
-        // Forzar ancho completo manipulando el DOM
+        // Buscar si ya existe un timeline persistente
+        const existingTimeline = document.getElementById(timelineId);
+        
+        if (existingTimeline) {
+            console.log('Timeline ya existe, reutilizando');
+            // Solo asegurar que está visible
+            existingTimeline.style.display = 'block';
+            
+            // Actualizar referencia del contenedor de dataview
+            this.dvContainer.innerHTML = '';
+            this.dvContainer.style.display = 'none';
+            return;
+        }
+        
+        // Crear contenedor persistente FUERA del control de Dataview
+        this.container = this.createPersistentContainer();
+        
+        // Ocultar el contenedor de dataview original
+        this.dvContainer.innerHTML = '';
+        this.dvContainer.style.display = 'none';
+        
+        // Forzar ancho completo
         this.forceFullWidth();
         
         this.init();
     }
+
+    createPersistentContainer() {
+        // Buscar el contenedor padre adecuado (markdown-preview-view)
+        let targetParent = this.dvContainer.closest('.markdown-preview-view');
+        if (!targetParent) {
+            targetParent = this.dvContainer.closest('.workspace-leaf-content');
+        }
+        if (!targetParent) {
+            targetParent = this.dvContainer.parentElement;
+        }
+        
+        // Crear contenedor persistente
+        const persistentContainer = document.createElement('div');
+        persistentContainer.id = timelineId;
+        persistentContainer.classList.add('tasks-timeline-persistent');
+        
+        // Insertar DESPUÉS del bloque de dataview
+        const dvBlock = this.dvContainer.closest('.block-language-dataviewjs');
+        if (dvBlock) {
+            dvBlock.parentNode.insertBefore(persistentContainer, dvBlock.nextSibling);
+        } else {
+            this.dvContainer.parentNode.insertBefore(persistentContainer, this.dvContainer.nextSibling);
+        }
+        
+        console.log('Contenedor persistente creado:', timelineId);
+        
+        return persistentContainer;
+    }
+
+    // Ya no necesitamos rebindEvents ni saveCurrentState
+    // porque el contenedor persiste y no se destruye
 
     forceFullWidth() {
         // Aplicar estilos al contenedor y todos sus padres
@@ -418,12 +514,14 @@ class TasksTimeline {
     async createOverdueContainer(parent, today) {
         const dayContainer = parent.createDiv('day-container');
         dayContainer.classList.add('overdue-container');
+        dayContainer.setAttribute('data-days-offset', '0');
 
         const header = dayContainer.createEl('div', { cls: 'day-header' });
         header.createEl('span', { text: '⚠️ Retrasadas', cls: 'day-label' });
 
         const tasksList = dayContainer.createDiv('tasks-list');
-        tasksList.classList.add('droppable');
+        // NO añadir clase 'droppable' para que no se vea como zona de drop
+        // tasksList.classList.add('droppable');
 
         const overdueTasks = await this.getOverdueTasks(today);
         
@@ -436,13 +534,14 @@ class TasksTimeline {
             }
         }
 
-        // Las tareas retrasadas se pueden mover
-        this.setupDropZone(tasksList, this.formatDate(today), 'Hoy');
+        // NO configurar drop zone para esta columna
+        // this.setupDropZone(tasksList, this.formatDate(today), 'Hoy');
     }
 
     async createNoDateContainer(parent) {
         const dayContainer = parent.createDiv('day-container');
         dayContainer.classList.add('no-date-container');
+        dayContainer.setAttribute('data-days-offset', '0');
 
         const header = dayContainer.createEl('div', { cls: 'day-header' });
         header.createEl('span', { text: '📋 Sin Fecha', cls: 'day-label' });
@@ -476,7 +575,19 @@ class TasksTimeline {
         checkbox.classList.add('task-checkbox');
         checkbox.checked = task.completed;
         checkbox.addEventListener('change', async (e) => {
+            const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
             await this.toggleTaskComplete(task, e.target.checked);
+            
+            // Animar la eliminación de la tarea si se completó
+            if (e.target.checked) {
+                taskEl.style.opacity = '0';
+                taskEl.style.transform = 'translateX(20px)';
+                setTimeout(() => {
+                    taskEl.remove();
+                    const timelineMain = this.container.querySelector('.timeline-main');
+                    if (timelineMain) timelineMain.scrollLeft = scrollPos;
+                }, 300);
+            }
         });
 
         const text = taskContent.createSpan({ text: task.text });
@@ -484,6 +595,27 @@ class TasksTimeline {
         if (task.completed) {
             text.classList.add('completed');
         }
+
+        // Botón de cancelar
+        const cancelBtn = taskContent.createEl('button', { text: '✖' });
+        cancelBtn.classList.add('task-cancel-btn');
+        cancelBtn.title = 'Cancelar tarea';
+        cancelBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
+            await this.cancelTask(task);
+            
+            // Animar la eliminación
+            taskEl.style.opacity = '0';
+            taskEl.style.transform = 'translateX(-20px)';
+            setTimeout(() => {
+                taskEl.remove();
+                const timelineMain = this.container.querySelector('.timeline-main');
+                if (timelineMain) timelineMain.scrollLeft = scrollPos;
+            }, 300);
+            
+            new Notice('🚫 Tarea cancelada');
+        });
 
         const fileInfo = taskEl.createDiv('task-file-info');
         fileInfo.innerHTML = `📄 <span class="file-name">${task.file.basename}</span>`;
@@ -495,14 +627,16 @@ class TasksTimeline {
         taskEl.dataset.taskData = JSON.stringify({
             file: task.file.path,
             line: task.line,
-            fullLine: task.fullLine
+            fullLine: task.fullLine,
+            text: task.text
         });
 
         taskEl.addEventListener('dragstart', (e) => {
             const taskData = {
                 file: task.file.path,
                 line: task.line,
-                fullLine: task.fullLine
+                fullLine: task.fullLine,
+                text: task.text
             };
             console.log('Drag start - Datos:', taskData);
             e.dataTransfer.setData('text/plain', JSON.stringify(taskData));
@@ -547,10 +681,55 @@ class TasksTimeline {
                 console.log('Tarea parseada:', taskData);
                 console.log('Moviendo a fecha:', targetDate);
                 
+                // Guardar la posición de scroll
+                const scrollPos = this.container.querySelector('.timeline-main').scrollLeft;
+                
+                // Actualizar la fecha en el archivo
                 await this.updateTaskDate(taskData.file, taskData.line, taskData.fullLine, targetDate);
                 
+                // Encontrar el elemento que se arrastró
+                const draggedElement = document.querySelector('.task-item.dragging');
+                let taskText = taskData.text;
+                
+                // Si no tenemos el texto en taskData, intentar extraerlo del elemento
+                if (!taskText && draggedElement) {
+                    const textElement = draggedElement.querySelector('.task-text');
+                    if (textElement) {
+                        taskText = textElement.textContent;
+                    }
+                }
+                
+                if (draggedElement) {
+                    // Removerlo de su posición actual
+                    draggedElement.remove();
+                }
+                
+                // Limpiar el mensaje de "Sin tareas" si existe
+                const emptyMsg = dropZone.querySelector('.empty-message');
+                if (emptyMsg) {
+                    emptyMsg.remove();
+                }
+                
+                // Crear nueva tarea en la nueva ubicación
+                const taskInfo = {
+                    text: taskText || 'Tarea',
+                    file: this.app.vault.getAbstractFileByPath(taskData.file),
+                    line: taskData.line,
+                    date: targetDate,
+                    fullLine: taskData.fullLine,
+                    completed: false,
+                    cancelled: false
+                };
+                
+                this.createTaskElement(dropZone, taskInfo);
+                
+                // Restaurar scroll
+                setTimeout(() => {
+                    const timelineMain = this.container.querySelector('.timeline-main');
+                    if (timelineMain) timelineMain.scrollLeft = scrollPos;
+                }, 0);
+                
                 new Notice(`✅ Tarea movida a: ${label}`);
-                setTimeout(() => this.render(), 500);
             } catch (error) {
                 new Notice(`❌ Error: ${error.message}`);
                 console.error('Error completo:', error);
@@ -744,12 +923,8 @@ class TasksTimeline {
 
         lines[lineNumber] = newLine;
         
-        try {
-            await this.app.vault.modify(file, lines.join('\n'));
-            console.log('✅ Archivo modificado correctamente');
-        } catch (modifyError) {
-            throw new Error(`Error al guardar: ${modifyError.message}`);
-        }
+        await this.app.vault.modify(file, lines.join('\n'));
+        console.log('✅ Archivo modificado correctamente');
     }
 
     async toggleTaskComplete(task, completed) {
@@ -768,7 +943,22 @@ class TasksTimeline {
 
         lines[task.line] = newLine;
         await this.app.vault.modify(file, lines.join('\n'));
-        setTimeout(() => this.render(), 300);
+    }
+
+    async cancelTask(task) {
+        const file = this.app.vault.getAbstractFileByPath(task.file.path);
+        if (!file || file.extension !== 'md') return;
+
+        const content = await this.app.vault.read(file);
+        const lines = content.split('\n');
+
+        if (task.line >= lines.length) return;
+
+        const line = lines[task.line];
+        const newLine = line.replace(/\[[ x]\]/, '[-]');
+
+        lines[task.line] = newLine;
+        await this.app.vault.modify(file, lines.join('\n'));
     }
 
     formatDate(date) {
