@@ -414,6 +414,21 @@ class TasksTimeline {
         await this.render();
     }
 
+    // Función para comparar prioridades
+    // Orden: 🔺 ⏫ (highest) > 🔼 (high) > sin prioridad > 🔽 (low) > ⏬ (lowest)
+    comparePriority(lineA, lineB) {
+        const getPriorityValue = (line) => {
+            if (line.includes('🔺')) return 0;  // highest
+            if (line.includes('⏫')) return 1;  // highest
+            if (line.includes('🔼')) return 2;  // high
+            if (line.includes('🔽')) return 4;  // low
+            if (line.includes('⏬')) return 5;  // lowest
+            return 3;  // sin prioridad (medio)
+        };
+
+        return getPriorityValue(lineA) - getPriorityValue(lineB);
+    }
+
     async render() {
         this.container.empty();
 
@@ -472,6 +487,9 @@ class TasksTimeline {
         const tasks = await this.getTasksForDate(dateStr);
         const activeTasks = tasks.filter(t => !t.completed && !t.cancelled);
         
+        // Ordenar tareas por prioridad
+        activeTasks.sort((a, b) => this.comparePriority(a.fullLine, b.fullLine));
+        
         if (activeTasks.length === 0) {
             const emptyMsg = tasksList.createDiv('empty-message');
             emptyMsg.setText('Sin tareas');
@@ -496,6 +514,9 @@ class TasksTimeline {
 
         const overdueTasks = await this.getOverdueTasks(today);
         
+        // Ordenar tareas por prioridad
+        overdueTasks.sort((a, b) => this.comparePriority(a.fullLine, b.fullLine));
+        
         if (overdueTasks.length === 0) {
             const emptyMsg = tasksList.createDiv('empty-message');
             emptyMsg.setText('Sin tareas retrasadas');
@@ -519,6 +540,9 @@ class TasksTimeline {
 
         const noDateTasks = await this.getTasksWithoutDate();
         
+        // Ordenar tareas por prioridad
+        noDateTasks.sort((a, b) => this.comparePriority(a.fullLine, b.fullLine));
+        
         if (noDateTasks.length === 0) {
             const emptyMsg = tasksList.createDiv('empty-message');
             emptyMsg.setText('Sin tareas');
@@ -528,8 +552,7 @@ class TasksTimeline {
             }
         }
 
-        const today = new Date();
-        this.setupDropZone(tasksList, this.formatDate(today), 'Hoy');
+        this.setupDropZone(tasksList, null, 'Sin Fecha');
     }
 
     createTaskElement(parent, task) {
@@ -692,7 +715,15 @@ class TasksTimeline {
                 console.log('✅ Elemento original eliminado');
                 
                 await new Promise(resolve => setTimeout(resolve, 50));
-                await this.updateTaskDate(taskData.file, taskData.line, taskData.fullLine, targetDate);
+                
+                // Si targetDate es null, eliminar la fecha de inicio; si no, actualizarla
+                if (targetDate === null) {
+                    await this.removeTaskDate(taskData.file, taskData.line, taskData.fullLine);
+                    console.log('✅ Fecha de inicio eliminada');
+                } else {
+                    await this.updateTaskDate(taskData.file, taskData.line, taskData.fullLine, targetDate);
+                    console.log('✅ Fecha de inicio actualizada');
+                }
                 
                 const emptyMsg = dropZone.querySelector('.empty-message');
                 if (emptyMsg) emptyMsg.remove();
@@ -738,13 +769,18 @@ class TasksTimeline {
             lines.forEach((line, index) => {
                 const taskMatch = line.match(/^[\s]*[-*]\s+\[([x\-\s])\]/);
                 if (taskMatch) {
-                    const dateMatch = line.match(/[📅🗓️⏳🛫]\s*(\d{4}-\d{2}-\d{2})/);
+                    // Buscar fecha de inicio (🛫) en lugar de fecha de vencimiento
+                    const dateMatch = line.match(/🛫\s*(\d{4}-\d{2}-\d{2})/);
 
                     if (dateMatch && dateMatch[1] === date) {
+                        // Extraer prioridad (añadido 🔺)
+                        const priorityMatch = line.match(/[🔺⏫🔼🔽⏬]/);
+                        const priority = priorityMatch ? priorityMatch[0] : '';
+                        
                         let taskText = line
                             .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/, '')
                             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/g, '')
-                            .replace(/[⏫🔼🔽⏬🔁♻️]/g, '')
+                            .replace(/[🔁♻️]/g, '')
                             .replace(/#[\w-]+/g, '')
                             .replace(/\s+/g, ' ')
                             .trim();
@@ -783,13 +819,14 @@ class TasksTimeline {
             lines.forEach((line, index) => {
                 const taskMatch = line.match(/^[\s]*[-*]\s+\[([x\-\s])\]/);
                 if (taskMatch) {
-                    const dateMatch = line.match(/[📅🗓️⏳🛫]\s*(\d{4}-\d{2}-\d{2})/);
+                    // Buscar fecha de inicio (🛫) en lugar de fecha de vencimiento
+                    const dateMatch = line.match(/🛫\s*(\d{4}-\d{2}-\d{2})/);
 
                     if (dateMatch && dateMatch[1] < todayStr && taskMatch[1] !== 'x' && taskMatch[1] !== '-') {
                         let taskText = line
                             .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/, '')
                             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/g, '')
-                            .replace(/[⏫🔼🔽⏬🔁♻️]/g, '')
+                            .replace(/[🔺⏫🔼🔽⏬🔁♻️]/g, '')
                             .replace(/#[\w-]+/g, '')
                             .replace(/\s+/g, ' ')
                             .trim();
@@ -826,12 +863,13 @@ class TasksTimeline {
             lines.forEach((line, index) => {
                 const taskMatch = line.match(/^[\s]*[-*]\s+\[([x\-\s])\]/);
                 if (taskMatch) {
-                    const hasDate = line.match(/[📅🗓️⏳🛫]\s*\d{4}-\d{2}-\d{2}/);
+                    // Buscar solo fecha de inicio (🛫)
+                    const hasDate = line.match(/🛫\s*\d{4}-\d{2}-\d{2}/);
 
                     if (!hasDate && taskMatch[1] !== 'x' && taskMatch[1] !== '-') {
                         let taskText = line
                             .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/, '')
-                            .replace(/[⏫🔼🔽⏬🔁♻️]/g, '')
+                            .replace(/[🔺⏫🔼🔽⏬🔁♻️]/g, '')
                             .replace(/#[\w-]+/g, '')
                             .replace(/\s+/g, ' ')
                             .trim();
@@ -869,24 +907,144 @@ class TasksTimeline {
 
         const originalLine = lines[lineNumber];
         
+        // Extraer indentación
         const indentMatch = originalLine.match(/^(\s*)/);
         const indent = indentMatch ? indentMatch[1] : '';
         
+        // Extraer tipo de lista
         const listMarkerMatch = originalLine.match(/^[\s]*([-*])/);
         const listMarker = listMarkerMatch ? listMarkerMatch[1] : '-';
         
+        // Extraer estado del checkbox
         const checkboxMatch = originalLine.match(/\[([x\-\s])\]/);
         const checkboxState = checkboxMatch ? checkboxMatch[1] : ' ';
         
+        // Extraer emojis de prioridad (⏫🔼🔽⏬🔺) - AÑADIDO 🔺
+        const priorityMatch = originalLine.match(/[🔺⏫🔼🔽⏬]/);
+        const priority = priorityMatch ? priorityMatch[0] : '';
+        
+        // Extraer emojis de recurrencia (🔁♻️)
+        const recurrenceMatch = originalLine.match(/[🔁♻️]/);
+        const recurrence = recurrenceMatch ? recurrenceMatch[0] : '';
+        
+        // Extraer otras fechas (due date, scheduled, etc.) para preservarlas
+        const otherDates = [];
+        const dueDateMatch = originalLine.match(/📅\s*(\d{4}-\d{2}-\d{2})/);
+        if (dueDateMatch) otherDates.push(`📅 ${dueDateMatch[1]}`);
+        
+        const scheduledMatch = originalLine.match(/⏳\s*(\d{4}-\d{2}-\d{2})/);
+        if (scheduledMatch) otherDates.push(`⏳ ${scheduledMatch[1]}`);
+        
+        // Extraer texto limpio (sin checkbox, fechas, prioridad, recurrencia, tags)
         let taskText = originalLine
-            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/, '')
-            .replace(/[📅🗓️⏳🛫🛬✅⏫🔼🔽⏬🔁♻️]\s*\d{4}-\d{2}-\d{2}/g, '')
-            .replace(/[⏫🔼🔽⏬]/g, '')
-            .replace(/[🔁♻️]\s*[^📅🗓️⏳🛫🛬✅]*/g, '')
+            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/, '') // Quitar checkbox
+            .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/g, '') // Quitar fechas
+            .replace(/[🔺⏫🔼🔽⏬]/g, '') // Quitar prioridad temporalmente
+            .replace(/[🔁♻️]/g, '') // Quitar recurrencia temporalmente
+            .replace(/#[\w-]+\s*$/g, '') // Quitar tags al final
             .trim();
         
-        const newLine = `${indent}${listMarker} [${checkboxState}] ${taskText} 📅 ${newDate}`;
+        // Reconstruir la línea con todos los metadatos preservados
+        let newLine = `${indent}${listMarker} [${checkboxState}] ${taskText}`;
         
+        // Añadir prioridad si existía
+        if (priority) {
+            newLine += ` ${priority}`;
+        }
+        
+        // Añadir recurrencia si existía
+        if (recurrence) {
+            newLine += ` ${recurrence}`;
+        }
+        
+        // Añadir la nueva fecha de INICIO (🛫) al final
+        newLine += ` 🛫 ${newDate}`;
+        
+        // Añadir otras fechas que existían
+        if (otherDates.length > 0) {
+            newLine += ' ' + otherDates.join(' ');
+        }
+        
+        console.log('Línea original:', originalLine);
+        console.log('Línea nueva:', newLine);
+        console.log('Prioridad preservada:', priority || 'ninguna');
+        
+        lines[lineNumber] = newLine;
+        await this.app.vault.modify(file, lines.join('\n'));
+    }
+
+    async removeTaskDate(filePath, lineNumber, oldLine) {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+
+        if (!file || file.extension !== 'md') {
+            throw new Error('Archivo no válido');
+        }
+
+        const content = await this.app.vault.read(file);
+        const lines = content.split('\n');
+
+        if (lineNumber >= lines.length) {
+            throw new Error('Línea no válida');
+        }
+
+        const originalLine = lines[lineNumber];
+
+        // Extraer indentación
+        const indentMatch = originalLine.match(/^(\s*)/);
+        const indent = indentMatch ? indentMatch[1] : '';
+
+        // Extraer tipo de lista
+        const listMarkerMatch = originalLine.match(/^[\s]*([-*])/);
+        const listMarker = listMarkerMatch ? listMarkerMatch[1] : '-';
+
+        // Extraer estado del checkbox
+        const checkboxMatch = originalLine.match(/\[([x\-\s])\]/);
+        const checkboxState = checkboxMatch ? checkboxMatch[1] : ' ';
+
+        // Extraer emojis de prioridad
+        const priorityMatch = originalLine.match(/[🔺⏫🔼🔽⏬]/);
+        const priority = priorityMatch ? priorityMatch[0] : '';
+
+        // Extraer emojis de recurrencia
+        const recurrenceMatch = originalLine.match(/[🔁♻️]/);
+        const recurrence = recurrenceMatch ? recurrenceMatch[0] : '';
+
+        // Extraer otras fechas que NO sean start date para preservarlas
+        const otherDates = [];
+        const dueDateMatch = originalLine.match(/📅\s*(\d{4}-\d{2}-\d{2})/);
+        if (dueDateMatch) otherDates.push(`📅 ${dueDateMatch[1]}`);
+        
+        const scheduledMatch = originalLine.match(/⏳\s*(\d{4}-\d{2}-\d{2})/);
+        if (scheduledMatch) otherDates.push(`⏳ ${scheduledMatch[1]}`);
+
+        // Extraer texto limpio
+        let taskText = originalLine
+            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/, '')
+            .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/g, '')
+            .replace(/[🔺⏫🔼🔽⏬]/g, '')
+            .replace(/[🔁♻️]/g, '')
+            .replace(/#[\w-]+\s*$/g, '')
+            .trim();
+
+        // Reconstruir la línea sin fecha de inicio
+        let newLine = `${indent}${listMarker} [${checkboxState}] ${taskText}`;
+
+        if (priority) {
+            newLine += ` ${priority}`;
+        }
+
+        if (recurrence) {
+            newLine += ` ${recurrence}`;
+        }
+
+        // Añadir otras fechas que existían
+        if (otherDates.length > 0) {
+            newLine += ' ' + otherDates.join(' ');
+        }
+
+        console.log('Línea original:', originalLine);
+        console.log('Línea nueva (sin fecha):', newLine);
+
         lines[lineNumber] = newLine;
         await this.app.vault.modify(file, lines.join('\n'));
     }
