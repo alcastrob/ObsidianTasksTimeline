@@ -1,9 +1,9 @@
 /**
- * Tasks Timeline - Dataview View
+ * Tasks Timeline - Dataview View v2.0
  * 
- * Uso en cualquier nota:
+ * Uso:
  * ```dataviewjs
- * await dv.view("tasks-timeline", {days: 3, filter: ""})
+ * await dv.view("tasks-timeline", {filter: "Proyectos/"})
  * ```
  */
 
@@ -11,10 +11,15 @@
 const timelineId = 'tasks-timeline-' + Date.now();
 
 // CSS embebido directamente en el código
-const cssId = 'tasks-timeline-css-v14';
+const cssId = 'tasks-timeline-css-v18';
 
-// Eliminar versiones antiguas
-['tasks-timeline-css', 'tasks-timeline-css-v2', 'tasks-timeline-css-v3', 'tasks-timeline-css-v4', 'tasks-timeline-css-v5', 'tasks-timeline-css-v6', 'tasks-timeline-css-v7', 'tasks-timeline-css-v8', 'tasks-timeline-css-v9', 'tasks-timeline-css-v10', 'tasks-timeline-css-v11', 'tasks-timeline-css-v12', 'tasks-timeline-css-v13'].forEach(oldId => {
+// Eliminar versiones antiguas del CSS
+const oldCssVersions = [];
+for (let i = 0; i <= 17; i++) {
+    if (i === 0) oldCssVersions.push('tasks-timeline-css');
+    else oldCssVersions.push(`tasks-timeline-css-v${i}`);
+}
+oldCssVersions.forEach(oldId => {
     const oldStyle = document.getElementById(oldId);
     if (oldStyle) oldStyle.remove();
 });
@@ -23,7 +28,7 @@ if (!document.getElementById(cssId)) {
     const style = document.createElement('style');
     style.id = cssId;
     style.textContent = `
-/* Tasks Timeline Full Width - Estilos agresivos */
+/* Tasks Timeline Full Width */
 .tasks-timeline-container {
     width: 100vw !important;
     max-width: 100vw !important;
@@ -35,7 +40,6 @@ if (!document.getElementById(cssId)) {
     box-sizing: border-box;
 }
 
-/* Forzar que los padres no limiten el ancho */
 .tasks-timeline-container * {
     box-sizing: border-box;
 }
@@ -321,11 +325,10 @@ if (!document.getElementById(cssId)) {
     console.log('CSS embebido insertado');
 }
 
-// Configuración por defecto
+// Configuración
 const config = {
-    days: input?.days || 3,           // Número de días a mostrar
-    filter: input?.filter || "",       // Filtro de carpeta (ej: "Proyectos/")
-    showCompleted: input?.showCompleted !== false  // Mostrar completadas
+    filter: input?.filter || "",
+    showCompleted: input?.showCompleted !== false
 };
 
 class TasksTimeline {
@@ -340,44 +343,29 @@ class TasksTimeline {
         
         if (existingTimeline) {
             console.log('Timeline ya existe, reutilizando');
-            // Solo asegurar que está visible
             existingTimeline.style.display = 'block';
-            
-            // Actualizar referencia del contenedor de dataview
             this.dvContainer.innerHTML = '';
             this.dvContainer.style.display = 'none';
             return;
         }
         
-        // Crear contenedor persistente FUERA del control de Dataview
+        // Crear contenedor persistente
         this.container = this.createPersistentContainer();
-        
-        // Ocultar el contenedor de dataview original
         this.dvContainer.innerHTML = '';
         this.dvContainer.style.display = 'none';
-        
-        // Forzar ancho completo
         this.forceFullWidth();
-        
         this.init();
     }
 
     createPersistentContainer() {
-        // Buscar el contenedor padre adecuado (markdown-preview-view)
         let targetParent = this.dvContainer.closest('.markdown-preview-view');
-        if (!targetParent) {
-            targetParent = this.dvContainer.closest('.workspace-leaf-content');
-        }
-        if (!targetParent) {
-            targetParent = this.dvContainer.parentElement;
-        }
+        if (!targetParent) targetParent = this.dvContainer.closest('.workspace-leaf-content');
+        if (!targetParent) targetParent = this.dvContainer.parentElement;
         
-        // Crear contenedor persistente
         const persistentContainer = document.createElement('div');
         persistentContainer.id = timelineId;
         persistentContainer.classList.add('tasks-timeline-persistent');
         
-        // Insertar DESPUÉS del bloque de dataview
         const dvBlock = this.dvContainer.closest('.block-language-dataviewjs');
         if (dvBlock) {
             dvBlock.parentNode.insertBefore(persistentContainer, dvBlock.nextSibling);
@@ -386,38 +374,29 @@ class TasksTimeline {
         }
         
         console.log('Contenedor persistente creado:', timelineId);
-        
         return persistentContainer;
     }
 
-    // Ya no necesitamos rebindEvents ni saveCurrentState
-    // porque el contenedor persiste y no se destruye
-
     forceFullWidth() {
-        // Aplicar estilos al contenedor y todos sus padres
         this.container.style.width = '100%';
         this.container.style.maxWidth = 'none';
         this.container.style.margin = '0';
         this.container.style.padding = '0';
         
-        // Buscar y modificar contenedores padre
         let parent = this.container.parentElement;
         let attempts = 0;
         
         while (parent && attempts < 10) {
-            // Forzar ancho completo en todos los padres
             parent.style.width = '100%';
             parent.style.maxWidth = 'none';
             parent.style.padding = '0';
             parent.style.margin = '0';
             
-            // Si encontramos view-content, aplicar estilos específicos
             if (parent.classList.contains('view-content')) {
                 parent.style.padding = '0 !important';
                 parent.style.width = '100% !important';
             }
             
-            // Si encontramos markdown-preview-view, aplicar estilos
             if (parent.classList.contains('markdown-preview-view')) {
                 parent.style.padding = '0 !important';
                 parent.style.width = '100% !important';
@@ -442,17 +421,13 @@ class TasksTimeline {
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        const dayOfWeek = today.getDay(); // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+        const dayOfWeek = today.getDay();
 
-        // 1. Retrasadas
         await this.createOverdueContainer(timelineMain, today);
-
-        // 2. Hoy
         await this.createDayContainer(timelineMain, 'Hoy', 0, today);
 
-        // 3. Días de esta semana (hasta viernes)
-        if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Lunes a Viernes
-            const daysUntilFriday = 5 - dayOfWeek; // Cuántos días faltan hasta viernes
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            const daysUntilFriday = 5 - dayOfWeek;
             const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             
             for (let i = 1; i <= daysUntilFriday; i++) {
@@ -463,16 +438,14 @@ class TasksTimeline {
             }
         }
 
-        // 4. Próxima semana (siguiente lunes)
         let daysUntilNextMonday;
-        if (dayOfWeek === 0) { // Domingo
+        if (dayOfWeek === 0) {
             daysUntilNextMonday = 1;
-        } else { // Lunes a Sábado
+        } else {
             daysUntilNextMonday = 8 - dayOfWeek;
         }
         await this.createDayContainer(timelineMain, 'Próxima Semana', daysUntilNextMonday, today);
 
-        // 5. Sin fecha
         await this.createNoDateContainer(timelineMain);
 
         const controls = this.container.createDiv('timeline-controls');
@@ -520,8 +493,6 @@ class TasksTimeline {
         header.createEl('span', { text: '⚠️ Retrasadas', cls: 'day-label' });
 
         const tasksList = dayContainer.createDiv('tasks-list');
-        // NO añadir clase 'droppable' para que no se vea como zona de drop
-        // tasksList.classList.add('droppable');
 
         const overdueTasks = await this.getOverdueTasks(today);
         
@@ -533,9 +504,6 @@ class TasksTimeline {
                 this.createTaskElement(tasksList, task);
             }
         }
-
-        // NO configurar drop zone para esta columna
-        // this.setupDropZone(tasksList, this.formatDate(today), 'Hoy');
     }
 
     async createNoDateContainer(parent) {
@@ -560,13 +528,16 @@ class TasksTimeline {
             }
         }
 
-        // Se puede asignar fecha a tareas sin fecha
         const today = new Date();
         this.setupDropZone(tasksList, this.formatDate(today), 'Hoy');
     }
 
     createTaskElement(parent, task) {
         const taskEl = parent.createDiv('task-item');
+        
+        // Crear ID único basado en archivo y línea
+        const taskId = `task-${task.file.path.replace(/[^a-zA-Z0-9]/g, '_')}-${task.line}`;
+        taskEl.id = taskId;
         taskEl.setAttribute('draggable', 'true');
 
         const taskContent = taskEl.createDiv('task-content');
@@ -578,7 +549,6 @@ class TasksTimeline {
             const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
             await this.toggleTaskComplete(task, e.target.checked);
             
-            // Animar la eliminación de la tarea si se completó
             if (e.target.checked) {
                 taskEl.style.opacity = '0';
                 taskEl.style.transform = 'translateX(20px)';
@@ -596,7 +566,6 @@ class TasksTimeline {
             text.classList.add('completed');
         }
 
-        // Botón de cancelar
         const cancelBtn = taskContent.createEl('button', { text: '✖' });
         cancelBtn.classList.add('task-cancel-btn');
         cancelBtn.title = 'Cancelar tarea';
@@ -605,7 +574,6 @@ class TasksTimeline {
             const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
             await this.cancelTask(task);
             
-            // Animar la eliminación
             taskEl.style.opacity = '0';
             taskEl.style.transform = 'translateX(-20px)';
             setTimeout(() => {
@@ -619,16 +587,38 @@ class TasksTimeline {
 
         const fileInfo = taskEl.createDiv('task-file-info');
         fileInfo.innerHTML = `📄 <span class="file-name">${task.file.basename}</span>`;
-        fileInfo.addEventListener('click', () => {
-            this.app.workspace.openLinkText(task.file.path, '', false);
+        fileInfo.addEventListener('click', async () => {
+            // Abrir en nueva pestaña
+            const leaf = this.app.workspace.getLeaf('tab');
+            await leaf.openFile(task.file);
+            
+            // Esperar a que se cargue la vista
+            setTimeout(() => {
+                // Obtener el editor de la nueva pestaña
+                const view = leaf.view;
+                if (view && view.editor) {
+                    // Hacer scroll a la línea de la tarea
+                    view.editor.setCursor({ line: task.line, ch: 0 });
+                    view.editor.scrollIntoView({ from: { line: task.line, ch: 0 }, to: { line: task.line, ch: 0 } }, true);
+                    
+                    // Opcional: resaltar brevemente la línea
+                    const lineElement = view.containerEl.querySelector(`.cm-line:nth-child(${task.line + 1})`);
+                    if (lineElement) {
+                        lineElement.style.backgroundColor = 'var(--text-highlight-bg)';
+                        setTimeout(() => {
+                            lineElement.style.backgroundColor = '';
+                        }, 1000);
+                    }
+                }
+            }, 100);
         });
 
-        // Guardar los datos en el elemento para el drag
         taskEl.dataset.taskData = JSON.stringify({
             file: task.file.path,
             line: task.line,
             fullLine: task.fullLine,
-            text: task.text
+            text: task.text,
+            taskId: taskId
         });
 
         taskEl.addEventListener('dragstart', (e) => {
@@ -636,7 +626,8 @@ class TasksTimeline {
                 file: task.file.path,
                 line: task.line,
                 fullLine: task.fullLine,
-                text: task.text
+                text: task.text,
+                taskId: taskId
             };
             console.log('Drag start - Datos:', taskData);
             e.dataTransfer.setData('text/plain', JSON.stringify(taskData));
@@ -644,12 +635,14 @@ class TasksTimeline {
             taskEl.classList.add('dragging');
         });
 
-        taskEl.addEventListener('dragend', () => {
+        taskEl.addEventListener('dragend', (e) => {
             taskEl.classList.remove('dragging');
         });
     }
 
     setupDropZone(dropZone, targetDate, label) {
+        dropZone.dataset.targetDate = targetDate;
+        
         dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
@@ -668,51 +661,44 @@ class TasksTimeline {
             dropZone.classList.remove('drag-over');
 
             const data = e.dataTransfer.getData('text/plain');
-            console.log('Drop - Datos recibidos:', data);
             
             if (!data) {
-                console.log('No hay datos en el drop');
                 new Notice('❌ No se pudo obtener los datos de la tarea');
                 return;
             }
 
             try {
                 const taskData = JSON.parse(data);
-                console.log('Tarea parseada:', taskData);
-                console.log('Moviendo a fecha:', targetDate);
+                console.log('Drop - taskId:', taskData.taskId, 'Fecha destino:', targetDate);
                 
-                // Guardar la posición de scroll
-                const scrollPos = this.container.querySelector('.timeline-main').scrollLeft;
+                const originalElement = document.getElementById(taskData.taskId);
                 
-                // Actualizar la fecha en el archivo
+                if (!originalElement) {
+                    console.log('⚠️ NO se encontró elemento original');
+                    new Notice('❌ Error: No se encontró la tarea original');
+                    return;
+                }
+                
+                const originalParent = originalElement.closest('.tasks-list');
+                if (originalParent === dropZone) {
+                    console.log('⚠️ Misma columna, ignorando');
+                    new Notice('ℹ️ La tarea ya está en esta columna');
+                    return;
+                }
+                
+                const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
+                
+                originalElement.remove();
+                console.log('✅ Elemento original eliminado');
+                
+                await new Promise(resolve => setTimeout(resolve, 50));
                 await this.updateTaskDate(taskData.file, taskData.line, taskData.fullLine, targetDate);
                 
-                // Encontrar el elemento que se arrastró
-                const draggedElement = document.querySelector('.task-item.dragging');
-                let taskText = taskData.text;
-                
-                // Si no tenemos el texto en taskData, intentar extraerlo del elemento
-                if (!taskText && draggedElement) {
-                    const textElement = draggedElement.querySelector('.task-text');
-                    if (textElement) {
-                        taskText = textElement.textContent;
-                    }
-                }
-                
-                if (draggedElement) {
-                    // Removerlo de su posición actual
-                    draggedElement.remove();
-                }
-                
-                // Limpiar el mensaje de "Sin tareas" si existe
                 const emptyMsg = dropZone.querySelector('.empty-message');
-                if (emptyMsg) {
-                    emptyMsg.remove();
-                }
+                if (emptyMsg) emptyMsg.remove();
                 
-                // Crear nueva tarea en la nueva ubicación
                 const taskInfo = {
-                    text: taskText || 'Tarea',
+                    text: taskData.text || 'Tarea',
                     file: this.app.vault.getAbstractFileByPath(taskData.file),
                     line: taskData.line,
                     date: targetDate,
@@ -722,8 +708,8 @@ class TasksTimeline {
                 };
                 
                 this.createTaskElement(dropZone, taskInfo);
+                console.log('✅ Nueva tarea creada');
                 
-                // Restaurar scroll
                 setTimeout(() => {
                     const timelineMain = this.container.querySelector('.timeline-main');
                     if (timelineMain) timelineMain.scrollLeft = scrollPos;
@@ -732,8 +718,7 @@ class TasksTimeline {
                 new Notice(`✅ Tarea movida a: ${label}`);
             } catch (error) {
                 new Notice(`❌ Error: ${error.message}`);
-                console.error('Error completo:', error);
-                console.error('Stack:', error.stack);
+                console.error('Error:', error);
             }
         });
     }
@@ -869,62 +854,41 @@ class TasksTimeline {
     }
 
     async updateTaskDate(filePath, lineNumber, oldLine, newDate) {
-        console.log('=== Actualizando tarea ===');
-        console.log('Archivo:', filePath);
-        console.log('Línea:', lineNumber);
-        console.log('Nueva fecha:', newDate);
-        
         const file = this.app.vault.getAbstractFileByPath(filePath);
         
-        if (!file) {
-            throw new Error(`Archivo no encontrado: ${filePath}`);
-        }
-        
-        if (file.extension !== 'md') {
-            throw new Error(`No es un archivo markdown: ${filePath}`);
+        if (!file || file.extension !== 'md') {
+            throw new Error('Archivo no válido');
         }
 
         const content = await this.app.vault.read(file);
         const lines = content.split('\n');
-        
-        console.log('Total líneas en archivo:', lines.length);
-        console.log('Línea original:', lines[lineNumber]);
 
         if (lineNumber >= lines.length) {
-            throw new Error(`Línea ${lineNumber} no existe (total: ${lines.length})`);
+            throw new Error('Línea no válida');
         }
 
         const originalLine = lines[lineNumber];
         
-        // Extraer la indentación
         const indentMatch = originalLine.match(/^(\s*)/);
         const indent = indentMatch ? indentMatch[1] : '';
         
-        // Extraer el tipo de lista (- o *)
         const listMarkerMatch = originalLine.match(/^[\s]*([-*])/);
         const listMarker = listMarkerMatch ? listMarkerMatch[1] : '-';
         
-        // Extraer el estado del checkbox
-        const checkboxMatch = originalLine.match(/\[([x ])\]/);
+        const checkboxMatch = originalLine.match(/\[([x\-\s])\]/);
         const checkboxState = checkboxMatch ? checkboxMatch[1] : ' ';
         
-        // Extraer solo el texto de la tarea, sin ningún metadata
         let taskText = originalLine
-            .replace(/^[\s]*[-*]\s+\[[x ]\]/, '') // Quitar checkbox
-            .replace(/[📅🗓️⏳🛫🛬✅⏫🔼🔽⏬🔁♻️]\s*\d{4}-\d{2}-\d{2}/g, '') // Quitar fechas
-            .replace(/[⏫🔼🔽⏬]/g, '') // Quitar prioridades sin fecha
-            .replace(/[🔁♻️]\s*[^📅🗓️⏳🛫🛬✅]*/g, '') // Quitar recurrencia
+            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/, '')
+            .replace(/[📅🗓️⏳🛫🛬✅⏫🔼🔽⏬🔁♻️]\s*\d{4}-\d{2}-\d{2}/g, '')
+            .replace(/[⏫🔼🔽⏬]/g, '')
+            .replace(/[🔁♻️]\s*[^📅🗓️⏳🛫🛬✅]*/g, '')
             .trim();
         
-        // Reconstruir la línea desde cero
         const newLine = `${indent}${listMarker} [${checkboxState}] ${taskText} 📅 ${newDate}`;
         
-        console.log('Línea reconstruida:', newLine);
-
         lines[lineNumber] = newLine;
-        
         await this.app.vault.modify(file, lines.join('\n'));
-        console.log('✅ Archivo modificado correctamente');
     }
 
     async toggleTaskComplete(task, completed) {
@@ -975,5 +939,5 @@ class TasksTimeline {
     }
 }
 
-// Inicializar componente
+// Inicializar
 new TasksTimeline(dv.container, app, dv, config);
