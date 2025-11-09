@@ -226,6 +226,89 @@ if (!document.getElementById(cssId)) {
     color: #ff6464;
 }
 
+.task-priority-selector {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.priority-button {
+    width: 20px !important;
+    height: 20px !important;
+    padding: 0 !important;
+    border: 1px solid red !important; /* DEBUG: ver el botón */
+    background: transparent !important;
+    color: var(--text-muted) !important;
+    cursor: pointer !important;
+    border-radius: 4px !important;
+    font-size: 12px !important;
+    line-height: 1 !important;
+    transition: all 0.2s ease;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    min-width: 20px !important;
+    max-width: 20px !important;
+    min-height: 20px !important;
+    max-height: 20px !important;
+}
+
+.priority-button:hover {
+    background: var(--background-secondary);
+    color: var(--interactive-accent);
+}
+
+.priority-dropdown {
+    position: fixed;
+    background: yellow; /* DEBUG: ver el dropdown */
+    border: 2px solid red; /* DEBUG: ver el dropdown */
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 9999;
+    min-width: 120px;
+}
+
+.priority-option {
+    padding: 6px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.priority-option:last-child {
+    border-bottom: none;
+    border-radius: 0 0 6px 6px;
+}
+
+.priority-option:first-child {
+    border-radius: 6px 6px 0 0;
+}
+
+.priority-option:hover {
+    background: var(--background-modifier-hover);
+}
+
+.priority-option.selected {
+    background: var(--background-modifier-active-hover);
+    font-weight: 600;
+}
+
+.priority-emoji {
+    font-size: 12px;
+    width: 16px;
+    text-align: center;
+}
+
+.priority-label {
+    flex: 1;
+    white-space: nowrap;
+}
+
 .task-file-info {
     font-size: 10px;
     color: var(--text-muted);
@@ -616,6 +699,10 @@ class TasksTimeline {
             new Notice('🚫 Tarea cancelada');
         });
 
+        // Selector de prioridad
+        const prioritySelector = taskContent.createDiv('task-priority-selector');
+        this.createPrioritySelector(prioritySelector, task, taskEl);
+
         const fileInfo = taskEl.createDiv('task-file-info');
         fileInfo.innerHTML = `📄 <span class="file-name">${task.file.basename}</span>`;
         fileInfo.addEventListener('click', async () => {
@@ -669,6 +756,341 @@ class TasksTimeline {
         taskEl.addEventListener('dragend', (e) => {
             taskEl.classList.remove('dragging');
         });
+    }
+
+    insertTaskByPriority(parent, task) {
+        // Obtener todas las tareas existentes en el contenedor
+        const existingTasks = Array.from(parent.querySelectorAll('.task-item'));
+        
+        // Si no hay tareas, simplemente crear la tarea
+        if (existingTasks.length === 0) {
+            this.createTaskElement(parent, task);
+            return;
+        }
+        
+        // Extraer el valor de prioridad de la nueva tarea
+        const getPriorityValue = (line) => {
+            const cleanLine = line.replace(/[\uFE0E\uFE0F]/g, '');
+            if (cleanLine.includes('🔺')) return 0;  // highest
+            if (cleanLine.includes('⏫')) return 1;  // highest
+            if (cleanLine.includes('🔼')) return 2;  // high
+            if (cleanLine.includes('🔽')) return 4;  // low
+            if (cleanLine.includes('⏬')) return 5;  // lowest
+            return 3;  // sin prioridad (medio)
+        };
+        
+        const newTaskPriority = getPriorityValue(task.fullLine);
+        console.log('Nueva tarea - fullLine:', task.fullLine);
+        console.log('Nueva tarea - prioridad:', newTaskPriority);
+        
+        // Encontrar la posición correcta según la prioridad
+        let insertIndex = -1;
+        for (let i = 0; i < existingTasks.length; i++) {
+            try {
+                const existingTaskData = JSON.parse(existingTasks[i].dataset.taskData);
+                const existingFullLine = existingTaskData.fullLine || '';
+                const existingPriority = getPriorityValue(existingFullLine);
+                
+                console.log(`Tarea existente ${i} - fullLine:`, existingFullLine);
+                console.log(`Tarea existente ${i} - prioridad:`, existingPriority);
+                
+                // Si la nueva tarea tiene mayor prioridad (menor valor),
+                // debe insertarse antes de la tarea existente
+                if (newTaskPriority < existingPriority) {
+                    insertIndex = i;
+                    console.log(`✓ Insertar en posición ${i} (prioridad ${newTaskPriority} < ${existingPriority})`);
+                    break;
+                }
+            } catch (e) {
+                console.error('Error al parsear taskData:', e);
+            }
+        }
+        
+        // Si insertIndex es -1, la tarea va al final (menor prioridad que todas las existentes)
+        if (insertIndex === -1) {
+            console.log('Insertar al final (menor o igual prioridad que todas)');
+            this.createTaskElement(parent, task);
+        } else {
+            // Crear la tarea en un contenedor temporal
+            const tempContainer = document.createElement('div');
+            this.createTaskElement(tempContainer, task);
+            const newTaskEl = tempContainer.firstChild;
+            
+            // Insertar antes de la tarea en insertIndex
+            parent.insertBefore(newTaskEl, existingTasks[insertIndex]);
+        }
+    }
+
+    createPrioritySelector(container, task, taskEl) {
+        const priorities = [
+            { emoji: '🔺', label: 'Highest', value: '🔺' },
+            { emoji: '⏫', label: 'High', value: '⏫' },
+            { emoji: '🔼', label: 'Medium', value: '🔼' },
+            { emoji: '➖', label: 'Normal', value: null },
+            { emoji: '🔽', label: 'Low', value: '🔽' },
+            { emoji: '⏬', label: 'Lowest', value: '⏬' }
+        ];
+
+        // Detectar prioridad actual
+        const getCurrentPriority = () => {
+            const cleanLine = task.fullLine.replace(/[\uFE0E\uFE0F]/g, '');
+            if (cleanLine.includes('🔺')) return '🔺';
+            if (cleanLine.includes('⏫')) return '⏫';
+            if (cleanLine.includes('🔼')) return '🔼';
+            if (cleanLine.includes('🔽')) return '🔽';
+            if (cleanLine.includes('⏬')) return '⏬';
+            return null;
+        };
+
+        let currentPriority = getCurrentPriority();
+
+        // Botón principal
+        const priorityButton = container.createEl('button');
+        priorityButton.classList.add('priority-button');
+        priorityButton.title = 'Cambiar prioridad';
+        priorityButton.textContent = currentPriority || '➖';
+        
+        // Aplicar estilos inline para asegurar el tamaño correcto
+        priorityButton.style.cssText = `
+            width: 20px !important;
+            height: 20px !important;
+            min-width: 20px !important;
+            max-width: 20px !important;
+            min-height: 20px !important;
+            max-height: 20px !important;
+            padding: 0 !important;
+            border: none !important;
+            background: transparent !important;
+            color: var(--text-muted) !important;
+            cursor: pointer !important;
+            border-radius: 4px !important;
+            font-size: 12px !important;
+            line-height: 1 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+        `;
+        
+        // Añadir efectos hover al botón
+        priorityButton.addEventListener('mouseenter', () => {
+            priorityButton.style.background = 'var(--background-secondary)';
+            priorityButton.style.color = 'var(--interactive-accent)';
+        });
+        priorityButton.addEventListener('mouseleave', () => {
+            priorityButton.style.background = 'transparent';
+            priorityButton.style.color = 'var(--text-muted)';
+        });
+
+        // Dropdown (añadirlo al body para que sea un verdadero overlay)
+        const dropdown = document.createElement('div');
+        dropdown.classList.add('priority-dropdown');
+        
+        // Aplicar estilos inline para asegurar que se apliquen
+        dropdown.style.cssText = `
+            position: fixed;
+            display: none;
+            background: var(--background-primary);
+            border: 1px solid var(--background-modifier-border);
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 9999;
+            min-width: 120px;
+            max-width: 120px;
+            width: 120px;
+        `;
+        
+        document.body.appendChild(dropdown);
+
+        // Crear opciones
+        priorities.forEach(priority => {
+            const option = document.createElement('div');
+            option.classList.add('priority-option');
+            option.style.cssText = `
+                padding: 6px 10px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                border-bottom: 1px solid var(--background-modifier-border);
+                background: var(--background-primary);
+                transition: all 0.2s ease;
+            `;
+            
+            if (priority.value === currentPriority) {
+                option.classList.add('selected');
+                option.style.background = 'var(--background-modifier-active-hover)';
+                option.style.fontWeight = '600';
+            }
+
+            const emoji = document.createElement('span');
+            emoji.classList.add('priority-emoji');
+            emoji.textContent = priority.emoji;
+            emoji.style.cssText = `
+                font-size: 12px;
+                width: 16px;
+                text-align: center;
+            `;
+            option.appendChild(emoji);
+
+            const label = document.createElement('span');
+            label.classList.add('priority-label');
+            label.textContent = priority.label;
+            label.style.cssText = `
+                flex: 1;
+                white-space: nowrap;
+            `;
+            option.appendChild(label);
+            
+            // Añadir efectos hover
+            option.addEventListener('mouseenter', () => {
+                if (priority.value !== currentPriority) {
+                    option.style.background = 'var(--background-modifier-hover)';
+                }
+            });
+            option.addEventListener('mouseleave', () => {
+                if (priority.value !== currentPriority) {
+                    option.style.background = 'var(--background-primary)';
+                } else {
+                    option.style.background = 'var(--background-modifier-active-hover)';
+                }
+            });
+
+            option.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                
+                // Si es la misma prioridad, no hacer nada
+                if (priority.value === currentPriority) {
+                    dropdown.style.display = 'none';
+                    dropdown.style.visibility = 'visible';
+                    return;
+                }
+
+                const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
+
+                try {
+                    // Actualizar prioridad en el archivo
+                    await this.updateTaskPriority(task.file.path, task.line, task.fullLine, priority.value);
+                    
+                    // Releer el archivo para obtener la línea actualizada
+                    const file = this.app.vault.getAbstractFileByPath(task.file.path);
+                    const content = await this.app.vault.read(file);
+                    const lines = content.split('\n');
+                    const updatedFullLine = lines[task.line];
+                    
+                    // Actualizar task con la nueva línea
+                    task.fullLine = updatedFullLine;
+                    currentPriority = priority.value;
+                    
+                    // Actualizar el botón
+                    priorityButton.textContent = currentPriority || '➖';
+                    
+                    // Actualizar las opciones seleccionadas
+                    dropdown.querySelectorAll('.priority-option').forEach(opt => {
+                        opt.classList.remove('selected');
+                    });
+                    option.classList.add('selected');
+                    
+                    // Cerrar dropdown
+                    dropdown.style.display = 'none';
+                    dropdown.style.visibility = 'visible';
+                    
+                    // Reordenar la tarea en su columna
+                    const parentList = taskEl.closest('.tasks-list');
+                    taskEl.remove();
+                    
+                    // Limpiar el dropdown del DOM
+                    if (dropdown && dropdown.parentNode) {
+                        dropdown.parentNode.removeChild(dropdown);
+                    }
+                    
+                    this.insertTaskByPriority(parentList, task);
+                    
+                    // Restaurar scroll
+                    setTimeout(() => {
+                        const timelineMain = this.container.querySelector('.timeline-main');
+                        if (timelineMain) timelineMain.scrollLeft = scrollPos;
+                    }, 0);
+                    
+                    new Notice(`✅ Prioridad actualizada a: ${priority.label}`);
+                } catch (error) {
+                    new Notice(`❌ Error al actualizar prioridad: ${error.message}`);
+                    console.error('Error:', error);
+                }
+            });
+            
+            dropdown.appendChild(option);
+        });
+
+        // Toggle dropdown
+        priorityButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            
+            if (dropdown.style.display === 'none' || dropdown.style.display === '') {
+                // Cerrar todos los otros dropdowns abiertos
+                document.querySelectorAll('.priority-dropdown').forEach(otherDropdown => {
+                    if (otherDropdown !== dropdown) {
+                        otherDropdown.style.display = 'none';
+                        otherDropdown.style.visibility = 'visible';
+                    }
+                });
+                
+                // Calcular posición del botón
+                const rect = priorityButton.getBoundingClientRect();
+                
+                // Mostrar dropdown temporalmente invisible para calcular su altura
+                dropdown.style.visibility = 'hidden';
+                dropdown.style.display = 'block';
+                
+                // Calcular posición (arriba del botón)
+                const dropdownHeight = dropdown.offsetHeight;
+                const leftPos = rect.left;
+                const topPos = rect.top - dropdownHeight - 4;
+                
+                dropdown.style.left = leftPos + 'px';
+                dropdown.style.top = topPos + 'px';
+                
+                // Hacer visible el dropdown
+                dropdown.style.visibility = 'visible';
+            } else {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // Cerrar dropdown al hacer clic fuera
+        const closeDropdown = (e) => {
+            if (!container.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.style.display = 'none';
+                dropdown.style.visibility = 'visible';
+            }
+        };
+        
+        // Limpiar el dropdown del DOM cuando se elimina la tarea
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.removedNodes.forEach((node) => {
+                    if (node === taskEl || (node.contains && node.contains(taskEl))) {
+                        if (dropdown && dropdown.parentNode) {
+                            dropdown.parentNode.removeChild(dropdown);
+                        }
+                        document.removeEventListener('click', closeDropdown);
+                        observer.disconnect();
+                    }
+                });
+            });
+        });
+        
+        // Observar el padre de la tarea para detectar cuando se elimina
+        const parentList = taskEl.closest('.tasks-list');
+        if (parentList) {
+            observer.observe(parentList, { childList: true, subtree: true });
+        }
+        
+        // Usar setTimeout para evitar que el mismo click que abre el dropdown lo cierre
+        setTimeout(() => {
+            document.addEventListener('click', closeDropdown);
+        }, 0);
     }
 
     setupDropZone(dropZone, targetDate, label) {
@@ -733,21 +1155,28 @@ class TasksTimeline {
                     console.log('✅ Fecha de inicio actualizada');
                 }
                 
+                // Releer el archivo para obtener la línea actualizada con la nueva fecha
+                const file = this.app.vault.getAbstractFileByPath(taskData.file);
+                const content = await this.app.vault.read(file);
+                const lines = content.split('\n');
+                const updatedFullLine = lines[taskData.line];
+                
                 const emptyMsg = dropZone.querySelector('.empty-message');
                 if (emptyMsg) emptyMsg.remove();
                 
                 const taskInfo = {
                     text: taskData.text || 'Tarea',
-                    file: this.app.vault.getAbstractFileByPath(taskData.file),
+                    file: file,
                     line: taskData.line,
                     date: targetDate,
-                    fullLine: taskData.fullLine,
+                    fullLine: updatedFullLine,  // Usar la línea actualizada
                     completed: false,
                     cancelled: false
                 };
                 
-                this.createTaskElement(dropZone, taskInfo);
-                console.log('✅ Nueva tarea creada');
+                // Encontrar la posición correcta para insertar la tarea según su prioridad
+                this.insertTaskByPriority(dropZone, taskInfo);
+                console.log('✅ Nueva tarea creada en posición ordenada por prioridad');
                 
                 setTimeout(() => {
                     const timelineMain = this.container.querySelector('.timeline-main');
@@ -788,6 +1217,7 @@ class TasksTimeline {
                         let taskText = line
                             .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '')
                             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
+                            .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad
                             .replace(/[🔁♻️]/gu, '')
                             .replace(/#[\w-]+/gu, '')
                             .replace(/\s+/g, ' ')
@@ -838,6 +1268,7 @@ class TasksTimeline {
                         let taskText = line
                             .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '')
                             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
+                            .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad
                             .replace(/[🔁♻️]/gu, '')
                             .replace(/#[\w-]+/gu, '')
                             .replace(/\s+/g, ' ')
@@ -885,6 +1316,7 @@ class TasksTimeline {
                         // Extraer texto de la línea ORIGINAL para preservar emojis
                         let taskText = line
                             .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '')
+                            .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad
                             .replace(/[🔁♻️]/gu, '')
                             .replace(/#[\w-]+/gu, '')
                             .replace(/\s+/g, ' ')
@@ -1066,6 +1498,85 @@ class TasksTimeline {
 
         console.log('Línea original:', originalLine);
         console.log('Línea nueva (sin fecha):', newLine);
+
+        lines[lineNumber] = newLine;
+        await this.app.vault.modify(file, lines.join('\n'));
+    }
+
+    async updateTaskPriority(filePath, lineNumber, oldLine, newPriority) {
+        const file = this.app.vault.getAbstractFileByPath(filePath);
+
+        if (!file || file.extension !== 'md') {
+            throw new Error('Archivo no válido');
+        }
+
+        const content = await this.app.vault.read(file);
+        const lines = content.split('\n');
+
+        if (lineNumber >= lines.length) {
+            throw new Error('Línea no válida');
+        }
+
+        const originalLine = lines[lineNumber];
+
+        // Extraer indentación
+        const indentMatch = originalLine.match(/^(\s*)/u);
+        const indent = indentMatch ? indentMatch[1] : '';
+
+        // Extraer tipo de lista
+        const listMarkerMatch = originalLine.match(/^[\s]*([-*])/u);
+        const listMarker = listMarkerMatch ? listMarkerMatch[1] : '-';
+
+        // Extraer estado del checkbox
+        const checkboxMatch = originalLine.match(/\[([x\-\s])\]/u);
+        const checkboxState = checkboxMatch ? checkboxMatch[1] : ' ';
+
+        // Extraer emojis de recurrencia de la línea ORIGINAL
+        const recurrenceMatch = originalLine.match(/[🔁♻️]/u);
+        const recurrence = recurrenceMatch ? recurrenceMatch[0] : '';
+
+        // Extraer todas las fechas para preservarlas
+        const dates = [];
+        const startDateMatch = originalLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
+        if (startDateMatch) dates.push(`🛫 ${startDateMatch[1]}`);
+        
+        const dueDateMatch = originalLine.match(/📅\s*(\d{4}-\d{2}-\d{2})/u);
+        if (dueDateMatch) dates.push(`📅 ${dueDateMatch[1]}`);
+        
+        const scheduledMatch = originalLine.match(/⏳\s*(\d{4}-\d{2}-\d{2})/u);
+        if (scheduledMatch) dates.push(`⏳ ${scheduledMatch[1]}`);
+
+        // Extraer texto limpio de la línea ORIGINAL
+        let taskText = originalLine
+            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '')
+            .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
+            .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar prioridad antigua
+            .replace(/[🔁♻️]/gu, '')
+            .replace(/#[\w-]+\s*$/gu, '')
+            .trim();
+
+        // Reconstruir la línea
+        let newLine = `${indent}${listMarker} [${checkboxState}] ${taskText}`;
+
+        // Añadir la nueva prioridad si existe
+        if (newPriority) {
+            newLine += ` ${newPriority}`;
+        }
+
+        // Añadir recurrencia si existía
+        if (recurrence) {
+            newLine += ` ${recurrence}`;
+        }
+
+        // Añadir fechas que existían
+        if (dates.length > 0) {
+            newLine += ' ' + dates.join(' ');
+        }
+
+        console.log('Actualizar prioridad:');
+        console.log('  Línea original:', originalLine);
+        console.log('  Nueva prioridad:', newPriority || 'ninguna');
+        console.log('  Línea nueva:', newLine);
 
         lines[lineNumber] = newLine;
         await this.app.vault.modify(file, lines.join('\n'));
