@@ -38,6 +38,7 @@ if (!document.getElementById(cssId)) {
     background: var(--background-primary);
     font-family: var(--font-interface);
     box-sizing: border-box;
+    transition: padding 0.3s ease;
 }
 
 .tasks-timeline-container * {
@@ -331,13 +332,77 @@ if (!document.getElementById(cssId)) {
     font-weight: 500;
 }
 
-.timeline-controls {
+.timeline-header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;
+    padding: 10px 20px;
+    margin-bottom: 10px;
+    gap: 20px;
+}
+
+.zoom-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.zoom-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.zoom-slider {
+    width: 150px;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--background-modifier-border);
+    border-radius: 2px;
+    outline: none;
+}
+
+.zoom-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--interactive-accent);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.zoom-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.zoom-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--interactive-accent);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+}
+
+.zoom-slider::-moz-range-thumb:hover {
+    transform: scale(1.2);
+}
+
+.zoom-value {
+    font-size: 12px;
+    color: var(--text-normal);
+    font-weight: 600;
+    min-width: 40px;
     text-align: center;
-    padding: 10px 20px 20px;
 }
 
 .timeline-refresh-btn {
-    padding: 10px 20px;
+    padding: 8px 16px;
     background: var(--interactive-accent);
     color: var(--text-on-accent);
     border: none;
@@ -405,13 +470,13 @@ if (!document.getElementById(cssId)) {
 }
     `;
     document.head.appendChild(style);
-    console.log('CSS embebido insertado');
 }
 
 // Configuración
 const config = {
     filter: input?.filter || "",
-    showCompleted: input?.showCompleted !== false
+    showCompleted: input?.showCompleted !== false,
+    daysView: input?.daysView || "full"  // "full", "2 days", "3 days", etc.
 };
 
 class TasksTimeline {
@@ -425,7 +490,6 @@ class TasksTimeline {
         const existingTimeline = document.getElementById(timelineId);
         
         if (existingTimeline) {
-            console.log('Timeline ya existe, reutilizando');
             existingTimeline.style.display = 'block';
             this.dvContainer.innerHTML = '';
             this.dvContainer.style.display = 'none';
@@ -456,7 +520,6 @@ class TasksTimeline {
             this.dvContainer.parentNode.insertBefore(persistentContainer, this.dvContainer.nextSibling);
         }
         
-        console.log('Contenedor persistente creado:', timelineId);
         return persistentContainer;
     }
 
@@ -488,8 +551,6 @@ class TasksTimeline {
             parent = parent.parentElement;
             attempts++;
         }
-        
-        console.log('Forzando ancho completo...');
     }
 
     async init() {
@@ -523,27 +584,87 @@ class TasksTimeline {
     async render() {
         this.container.empty();
 
+        // Header con controles de zoom y botón de refrescar (ambos a la derecha)
+        const header = this.container.createDiv('timeline-header');
+        
+        // Forzar alineación con estilos inline
+        header.style.display = 'flex';
+        header.style.justifyContent = 'flex-end';
+        header.style.alignItems = 'center';
+        header.style.width = '100%';
+        header.style.gap = '20px';
+        
+        // Control de zoom
+        const zoomControl = header.createDiv('zoom-control');
+        const zoomLabel = zoomControl.createSpan({ text: '🔍 Zoom:', cls: 'zoom-label' });
+        
+        const zoomSlider = zoomControl.createEl('input', { type: 'range' });
+        zoomSlider.classList.add('zoom-slider');
+        zoomSlider.min = '50';
+        zoomSlider.max = '150';
+        zoomSlider.step = '5';
+        
+        // Cargar zoom guardado o usar 100% por defecto
+        const savedZoom = localStorage.getItem('tasks-timeline-zoom') || '100';
+        zoomSlider.value = savedZoom;
+        
+        const zoomValue = zoomControl.createSpan({ text: `${savedZoom}%`, cls: 'zoom-value' });
+        
+        // Botón de refrescar (a la derecha)
+        const refreshBtn = header.createEl('button', { text: '🔄 Refrescar' });
+        refreshBtn.classList.add('timeline-refresh-btn');
+        refreshBtn.addEventListener('click', () => this.render());
+
         const timelineMain = this.container.createDiv('timeline-main');
+
+        // Aplicar zoom inicial centrado
+        const zoomPercent = parseInt(savedZoom);
+        timelineMain.style.transform = `scale(${zoomPercent / 100})`;
+        timelineMain.style.transformOrigin = 'top center';
+        
+        // Event listener para el slider de zoom
+        zoomSlider.addEventListener('input', (e) => {
+            const zoom = e.target.value;
+            zoomValue.textContent = `${zoom}%`;
+            timelineMain.style.transform = `scale(${zoom / 100})`;
+            localStorage.setItem('tasks-timeline-zoom', zoom);
+        });
 
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const dayOfWeek = today.getDay();
 
-        await this.createOverdueContainer(timelineMain, today);
-        await this.createDayContainer(timelineMain, 'Hoy', 0, today);
+        // Calcular cuántos días mostrar según el modo
+        let maxDaysToShow = Infinity;
+        if (this.config.daysView !== "full") {
+            const match = this.config.daysView.match(/^(\d+)\s*days?$/i);
+            if (match) {
+                maxDaysToShow = parseInt(match[1]);
+            }
+        }
 
+        // Siempre mostrar tareas atrasadas
+        await this.createOverdueContainer(timelineMain, today);
+        
+        // Mostrar "Hoy" (siempre)
+        await this.createDayContainer(timelineMain, 'Hoy', 0, today);
+        let daysShown = 1;
+
+        // Mostrar días adicionales según el modo
         if (dayOfWeek >= 1 && dayOfWeek <= 5) {
             const daysUntilFriday = 5 - dayOfWeek;
             const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             
-            for (let i = 1; i <= daysUntilFriday; i++) {
+            for (let i = 1; i <= daysUntilFriday && daysShown < maxDaysToShow; i++) {
                 const futureDate = new Date(today);
                 futureDate.setDate(today.getDate() + i);
                 const dayName = dayNames[futureDate.getDay()];
                 await this.createDayContainer(timelineMain, dayName, i, today);
+                daysShown++;
             }
         }
 
+        // Siempre mostrar "Próxima Semana"
         let daysUntilNextMonday;
         if (dayOfWeek === 0) {
             daysUntilNextMonday = 1;
@@ -552,13 +673,10 @@ class TasksTimeline {
         }
         await this.createDayContainer(timelineMain, 'Próxima Semana', daysUntilNextMonday, today);
 
+        // Siempre mostrar "Sin Fecha"
         await this.createNoDateContainer(timelineMain);
-
-        const controls = this.container.createDiv('timeline-controls');
-        const refreshBtn = controls.createEl('button', { text: '🔄 Refrescar' });
-        refreshBtn.classList.add('timeline-refresh-btn');
-        refreshBtn.addEventListener('click', () => this.render());
     }
+    
 
     async createDayContainer(parent, label, daysOffset, referenceDate) {
         const dayContainer = parent.createDiv('day-container');
@@ -747,7 +865,6 @@ class TasksTimeline {
                 text: task.text,
                 taskId: taskId
             };
-            console.log('Drag start - Datos:', taskData);
             e.dataTransfer.setData('text/plain', JSON.stringify(taskData));
             e.dataTransfer.effectAllowed = 'move';
             taskEl.classList.add('dragging');
@@ -780,8 +897,6 @@ class TasksTimeline {
         };
         
         const newTaskPriority = getPriorityValue(task.fullLine);
-        console.log('Nueva tarea - fullLine:', task.fullLine);
-        console.log('Nueva tarea - prioridad:', newTaskPriority);
         
         // Encontrar la posición correcta según la prioridad
         let insertIndex = -1;
@@ -791,14 +906,10 @@ class TasksTimeline {
                 const existingFullLine = existingTaskData.fullLine || '';
                 const existingPriority = getPriorityValue(existingFullLine);
                 
-                console.log(`Tarea existente ${i} - fullLine:`, existingFullLine);
-                console.log(`Tarea existente ${i} - prioridad:`, existingPriority);
-                
                 // Si la nueva tarea tiene mayor prioridad (menor valor),
                 // debe insertarse antes de la tarea existente
                 if (newTaskPriority < existingPriority) {
                     insertIndex = i;
-                    console.log(`✓ Insertar en posición ${i} (prioridad ${newTaskPriority} < ${existingPriority})`);
                     break;
                 }
             } catch (e) {
@@ -808,7 +919,6 @@ class TasksTimeline {
         
         // Si insertIndex es -1, la tarea va al final (menor prioridad que todas las existentes)
         if (insertIndex === -1) {
-            console.log('Insertar al final (menor o igual prioridad que todas)');
             this.createTaskElement(parent, task);
         } else {
             // Crear la tarea en un contenedor temporal
@@ -1122,19 +1232,16 @@ class TasksTimeline {
 
             try {
                 const taskData = JSON.parse(data);
-                console.log('Drop - taskId:', taskData.taskId, 'Fecha destino:', targetDate);
                 
                 const originalElement = document.getElementById(taskData.taskId);
                 
                 if (!originalElement) {
-                    console.log('⚠️ NO se encontró elemento original');
                     new Notice('❌ Error: No se encontró la tarea original');
                     return;
                 }
                 
                 const originalParent = originalElement.closest('.tasks-list');
                 if (originalParent === dropZone) {
-                    console.log('⚠️ Misma columna, ignorando');
                     new Notice('ℹ️ La tarea ya está en esta columna');
                     return;
                 }
@@ -1142,17 +1249,14 @@ class TasksTimeline {
                 const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
                 
                 originalElement.remove();
-                console.log('✅ Elemento original eliminado');
                 
                 await new Promise(resolve => setTimeout(resolve, 50));
                 
                 // Si targetDate es null, eliminar la fecha de inicio; si no, actualizarla
                 if (targetDate === null) {
                     await this.removeTaskDate(taskData.file, taskData.line, taskData.fullLine);
-                    console.log('✅ Fecha de inicio eliminada');
                 } else {
                     await this.updateTaskDate(taskData.file, taskData.line, taskData.fullLine, targetDate);
-                    console.log('✅ Fecha de inicio actualizada');
                 }
                 
                 // Releer el archivo para obtener la línea actualizada con la nueva fecha
@@ -1176,7 +1280,6 @@ class TasksTimeline {
                 
                 // Encontrar la posición correcta para insertar la tarea según su prioridad
                 this.insertTaskByPriority(dropZone, taskInfo);
-                console.log('✅ Nueva tarea creada en posición ordenada por prioridad');
                 
                 setTimeout(() => {
                     const timelineMain = this.container.querySelector('.timeline-main');
@@ -1416,10 +1519,6 @@ class TasksTimeline {
             newLine += ' ' + otherDates.join(' ');
         }
         
-        console.log('Línea original:', originalLine);
-        console.log('Línea nueva:', newLine);
-        console.log('Prioridad preservada:', priority || 'ninguna');
-        
         lines[lineNumber] = newLine;
         await this.app.vault.modify(file, lines.join('\n'));
     }
@@ -1496,9 +1595,6 @@ class TasksTimeline {
             newLine += ' ' + otherDates.join(' ');
         }
 
-        console.log('Línea original:', originalLine);
-        console.log('Línea nueva (sin fecha):', newLine);
-
         lines[lineNumber] = newLine;
         await this.app.vault.modify(file, lines.join('\n'));
     }
@@ -1572,11 +1668,6 @@ class TasksTimeline {
         if (dates.length > 0) {
             newLine += ' ' + dates.join(' ');
         }
-
-        console.log('Actualizar prioridad:');
-        console.log('  Línea original:', originalLine);
-        console.log('  Nueva prioridad:', newPriority || 'ninguna');
-        console.log('  Línea nueva:', newLine);
 
         lines[lineNumber] = newLine;
         await this.app.vault.modify(file, lines.join('\n'));
