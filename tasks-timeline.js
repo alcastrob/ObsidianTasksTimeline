@@ -11,11 +11,11 @@
 const timelineId = 'tasks-timeline-' + Date.now();
 
 // CSS embebido directamente en el código
-const cssId = 'tasks-timeline-css-v18';
+const cssId = 'tasks-timeline-css-v24';
 
 // Eliminar versiones antiguas del CSS
 const oldCssVersions = [];
-for (let i = 0; i <= 17; i++) {
+for (let i = 0; i <= 23; i++) {
     if (i === 0) oldCssVersions.push('tasks-timeline-css');
     else oldCssVersions.push(`tasks-timeline-css-v${i}`);
 }
@@ -30,15 +30,15 @@ if (!document.getElementById(cssId)) {
     style.textContent = `
 /* Tasks Timeline Full Width */
 .tasks-timeline-container {
-    width: 100vw !important;
-    max-width: 100vw !important;
-    margin-left: calc(50% - 50vw) !important;
-    margin-right: calc(50% - 50vw) !important;
-    padding: 20px 50px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 15px 20px !important;
     background: var(--background-primary);
     font-family: var(--font-interface);
     box-sizing: border-box;
     transition: padding 0.3s ease;
+    overflow-x: visible;
 }
 
 .tasks-timeline-container * {
@@ -355,7 +355,7 @@ if (!document.getElementById(cssId)) {
 }
 
 .zoom-slider {
-    width: 150px;
+    width: 100px;
     height: 4px;
     -webkit-appearance: none;
     appearance: none;
@@ -468,7 +468,190 @@ if (!document.getElementById(cssId)) {
         min-width: 100%;
     }
 }
+
+/* Botón Postponer */
+.postpone-btn {
+    margin-top: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 600;
+    width: 100%;
+}
+
+.postpone-btn:hover {
+    opacity: 0.85;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.postpone-btn:active {
+    transform: translateY(0);
+}
+
+/* Filtros de estado y columnas - Dropdown */
+.filter-dropdown-container {
+    position: relative;
+    display: inline-block;
+}
+
+.filter-dropdown-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.filter-dropdown-btn:hover {
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+}
+
+.filter-dropdown-btn.active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
+}
+
+.filter-dropdown-arrow {
+    font-size: 10px;
+    transition: transform 0.2s ease;
+}
+
+.filter-dropdown-btn.open .filter-dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.filter-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 180px;
+    padding: 8px;
+    display: none;
+}
+
+.filter-dropdown-menu.show {
+    display: block;
+}
+
+.filter-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    font-size: 12px;
+}
+
+.filter-option:hover {
+    background: var(--background-modifier-hover);
+}
+
+.filter-checkbox {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--background-modifier-border);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+}
+
+.filter-checkbox.checked {
+    background: var(--interactive-accent);
+    border-color: var(--interactive-accent);
+}
+
+.filter-checkbox.checked::after {
+    content: '✓';
+    color: var(--text-on-accent);
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.filter-option-label {
+    flex: 1;
+}
+
+.filter-separator {
+    width: 1px;
+    height: 20px;
+    background: var(--background-modifier-border);
+    margin: 0 5px;
+}
+
+/* Overlay para tareas enlazadas */
+.task-link {
+    cursor: help;
+    position: relative;
+    display: inline;
+    text-decoration: underline dotted;
+    text-decoration-color: var(--text-muted);
+}
+
+.task-overlay {
+    position: fixed;
+    background: var(--background-primary);
+    border: 2px solid var(--interactive-accent);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    max-width: 400px;
+    min-width: 250px;
+}
+
+.task-overlay-header {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.task-overlay-content {
+    font-size: 13px;
+    color: var(--text-normal);
+    line-height: 1.5;
+}
+
+.task-overlay-meta {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--background-modifier-border);
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* Indicadores de estado de tarea */
+.task-status-icon {
+    margin-right: 4px;
+}
     `;
+
     document.head.appendChild(style);
 }
 
@@ -485,6 +668,15 @@ class TasksTimeline {
         this.app = app;
         this.dv = dv;
         this.config = config;
+        
+        // Filtros de visualización
+        this.filters = {
+            showInProgress: true,
+            showWaiting: true,
+            showDelegated: true,
+            showNextWeek: true,
+            showNoDate: true
+        };
         
         // Buscar si ya existe un timeline persistente
         const existingTimeline = document.getElementById(timelineId);
@@ -553,6 +745,34 @@ class TasksTimeline {
         }
     }
 
+    getTaskStatus(checkboxState) {
+        if (checkboxState === '/') return 'in-progress';
+        if (checkboxState === '-') return 'waiting';
+        if (checkboxState === 'd') return 'delegated';
+        if (checkboxState === 'x') return 'completed';
+        return 'todo';
+    }
+
+    getTaskStatusIcon(checkboxState) {
+        const status = this.getTaskStatus(checkboxState);
+        switch(status) {
+            case 'in-progress': return '🔄';
+            case 'waiting': return '⏸️';
+            case 'delegated': return '👤';
+            default: return '';
+        }
+    }
+
+    shouldShowTask(checkboxState) {
+        const status = this.getTaskStatus(checkboxState);
+        
+        if (status === 'in-progress' && !this.filters.showInProgress) return false;
+        if (status === 'waiting' && !this.filters.showWaiting) return false;
+        if (status === 'delegated' && !this.filters.showDelegated) return false;
+        
+        return true;
+    }
+
     async init() {
         this.container.classList.add('tasks-timeline-container');
         await this.render();
@@ -587,15 +807,26 @@ class TasksTimeline {
         // Header con controles de zoom y botón de refrescar (ambos a la derecha)
         const header = this.container.createDiv('timeline-header');
         
-        // Forzar alineación con estilos inline
+        // Forzar alineación con estilos inline - usar space-between
         header.style.display = 'flex';
-        header.style.justifyContent = 'flex-end';
+        header.style.justifyContent = 'space-between';
         header.style.alignItems = 'center';
         header.style.width = '100%';
-        header.style.gap = '20px';
+        header.style.maxWidth = '100%';
+        header.style.gap = '8px';
+        header.style.flexWrap = 'wrap';
+        header.style.overflow = 'visible';
+        header.style.boxSizing = 'border-box';
         
-        // Control de zoom
-        const zoomControl = header.createDiv('zoom-control');
+        // Grupo izquierdo: Control de zoom
+        const leftGroup = header.createDiv();
+        leftGroup.style.display = 'flex';
+        leftGroup.style.alignItems = 'center';
+        leftGroup.style.gap = '8px';
+        leftGroup.style.flex = '0 1 auto'; // Puede encogerse si es necesario
+        leftGroup.style.minWidth = '0'; // Permite que se encoja
+        
+        const zoomControl = leftGroup.createDiv('zoom-control');
         const zoomLabel = zoomControl.createSpan({ text: '🔍 Zoom:', cls: 'zoom-label' });
         
         const zoomSlider = zoomControl.createEl('input', { type: 'range' });
@@ -610,10 +841,156 @@ class TasksTimeline {
         
         const zoomValue = zoomControl.createSpan({ text: `${savedZoom}%`, cls: 'zoom-value' });
         
-        // Botón de refrescar (a la derecha)
-        const refreshBtn = header.createEl('button', { text: '🔄 Refrescar' });
+        // Grupo derecho: Botones de control
+        const rightGroup = header.createDiv();
+        rightGroup.style.display = 'flex';
+        rightGroup.style.alignItems = 'center';
+        rightGroup.style.gap = '8px';
+        rightGroup.style.flexWrap = 'wrap';
+        rightGroup.style.justifyContent = 'flex-end';
+        rightGroup.style.flex = '0 1 auto'; // No crecer pero puede encogerse
+        
+        // Botón de refrescar - más pequeño
+        const refreshBtn = rightGroup.createEl('button', { text: '🔄 Refrescar' });
         refreshBtn.classList.add('timeline-refresh-btn');
+        refreshBtn.style.fontSize = '11px';
+        refreshBtn.style.padding = '4px 8px';
+        refreshBtn.style.fontWeight = 'normal';
         refreshBtn.addEventListener('click', () => this.render());
+        
+        // Dropdown de Columnas
+        const columnDropdownContainer = rightGroup.createDiv('filter-dropdown-container');
+        columnDropdownContainer.style.display = 'inline-block';
+        columnDropdownContainer.style.position = 'relative';
+        columnDropdownContainer.style.visibility = 'visible';
+        columnDropdownContainer.style.opacity = '1';
+        
+        const columnDropdownBtn = columnDropdownContainer.createEl('button', { text: '📋 Columnas ▼', cls: 'filter-dropdown-btn' });
+        columnDropdownBtn.style.display = 'inline-flex';
+        columnDropdownBtn.style.visibility = 'visible';
+        
+        const columnDropdownMenu = columnDropdownContainer.createDiv('filter-dropdown-menu');
+        
+        // Opción: Próxima semana
+        const nextWeekOption = columnDropdownMenu.createDiv('filter-option');
+        const nextWeekCheckbox = nextWeekOption.createDiv('filter-checkbox');
+        if (this.filters.showNextWeek) nextWeekCheckbox.classList.add('checked');
+        nextWeekOption.createSpan({ text: 'Próxima semana', cls: 'filter-option-label' });
+        nextWeekOption.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.filters.showNextWeek = !this.filters.showNextWeek;
+            this.render();
+        });
+        
+        // Opción: Sin fecha
+        const noDateOption = columnDropdownMenu.createDiv('filter-option');
+        const noDateCheckbox = noDateOption.createDiv('filter-checkbox');
+        if (this.filters.showNoDate) noDateCheckbox.classList.add('checked');
+        noDateOption.createSpan({ text: 'Sin fecha', cls: 'filter-option-label' });
+        noDateOption.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.filters.showNoDate = !this.filters.showNoDate;
+            this.render();
+        });
+        
+        // Toggle del dropdown de columnas
+        columnDropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = columnDropdownMenu.classList.contains('show');
+            
+            // Cerrar todos los otros dropdowns
+            document.querySelectorAll('.filter-dropdown-menu.show').forEach(menu => {
+                menu.classList.remove('show');
+            });
+            document.querySelectorAll('.filter-dropdown-btn.open').forEach(btn => {
+                btn.classList.remove('open');
+            });
+            
+            if (!isOpen) {
+                columnDropdownMenu.classList.add('show');
+                columnDropdownBtn.classList.add('open');
+            }
+        });
+        
+        // Dropdown de Estados
+        const statusDropdownContainer = rightGroup.createDiv('filter-dropdown-container');
+        statusDropdownContainer.style.display = 'inline-block';
+        statusDropdownContainer.style.position = 'relative';
+        statusDropdownContainer.style.visibility = 'visible';
+        statusDropdownContainer.style.opacity = '1';
+        
+        const statusDropdownBtn = statusDropdownContainer.createEl('button', { text: '🏷️ Estados ▼', cls: 'filter-dropdown-btn' });
+        statusDropdownBtn.style.display = 'inline-flex';
+        statusDropdownBtn.style.visibility = 'visible';
+        
+        const statusDropdownMenu = statusDropdownContainer.createDiv('filter-dropdown-menu');
+        
+        // Opción: En curso
+        const inProgressOption = statusDropdownMenu.createDiv('filter-option');
+        const inProgressCheckbox = inProgressOption.createDiv('filter-checkbox');
+        if (this.filters.showInProgress) inProgressCheckbox.classList.add('checked');
+        inProgressOption.createSpan({ text: '🔄 En curso', cls: 'filter-option-label' });
+        inProgressOption.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.filters.showInProgress = !this.filters.showInProgress;
+            this.render();
+        });
+        
+        // Opción: En espera
+        const waitingOption = statusDropdownMenu.createDiv('filter-option');
+        const waitingCheckbox = waitingOption.createDiv('filter-checkbox');
+        if (this.filters.showWaiting) waitingCheckbox.classList.add('checked');
+        waitingOption.createSpan({ text: '⏸️ En espera', cls: 'filter-option-label' });
+        waitingOption.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.filters.showWaiting = !this.filters.showWaiting;
+            this.render();
+        });
+        
+        // Opción: Delegadas
+        const delegatedOption = statusDropdownMenu.createDiv('filter-option');
+        const delegatedCheckbox = delegatedOption.createDiv('filter-checkbox');
+        if (this.filters.showDelegated) delegatedCheckbox.classList.add('checked');
+        delegatedOption.createSpan({ text: '👤 Delegadas', cls: 'filter-option-label' });
+        delegatedOption.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.filters.showDelegated = !this.filters.showDelegated;
+            this.render();
+        });
+        
+        // Toggle del dropdown de estados
+        statusDropdownBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = statusDropdownMenu.classList.contains('show');
+            
+            // Cerrar todos los otros dropdowns
+            document.querySelectorAll('.filter-dropdown-menu.show').forEach(menu => {
+                menu.classList.remove('show');
+            });
+            document.querySelectorAll('.filter-dropdown-btn.open').forEach(btn => {
+                btn.classList.remove('open');
+            });
+            
+            if (!isOpen) {
+                statusDropdownMenu.classList.add('show');
+                statusDropdownBtn.classList.add('open');
+            }
+        });
+        
+        // Cerrar dropdowns al hacer clic fuera
+        setTimeout(() => {
+            const closeDropdowns = (e) => {
+                if (!e.target.closest('.filter-dropdown-container')) {
+                    document.querySelectorAll('.filter-dropdown-menu.show').forEach(menu => {
+                        menu.classList.remove('show');
+                    });
+                    document.querySelectorAll('.filter-dropdown-btn.open').forEach(btn => {
+                        btn.classList.remove('open');
+                    });
+                }
+            };
+            document.addEventListener('click', closeDropdowns);
+        }, 0);
 
         const timelineMain = this.container.createDiv('timeline-main');
 
@@ -664,17 +1041,21 @@ class TasksTimeline {
             }
         }
 
-        // Siempre mostrar "Próxima Semana"
-        let daysUntilNextMonday;
-        if (dayOfWeek === 0) {
-            daysUntilNextMonday = 1;
-        } else {
-            daysUntilNextMonday = 8 - dayOfWeek;
+        // Mostrar "Próxima Semana" si el filtro está activo
+        if (this.filters.showNextWeek) {
+            let daysUntilNextMonday;
+            if (dayOfWeek === 0) {
+                daysUntilNextMonday = 1;
+            } else {
+                daysUntilNextMonday = 8 - dayOfWeek;
+            }
+            await this.createDayContainer(timelineMain, 'Próxima Semana', daysUntilNextMonday, today);
         }
-        await this.createDayContainer(timelineMain, 'Próxima Semana', daysUntilNextMonday, today);
 
-        // Siempre mostrar "Sin Fecha"
-        await this.createNoDateContainer(timelineMain);
+        // Mostrar "Sin Fecha" si el filtro está activo
+        if (this.filters.showNoDate) {
+            await this.createNoDateContainer(timelineMain);
+        }
     }
     
 
@@ -694,7 +1075,8 @@ class TasksTimeline {
         tasksList.classList.add('droppable');
 
         const tasks = await this.getTasksForDate(dateStr);
-        const activeTasks = tasks.filter(t => !t.completed && !t.cancelled);
+        // Solo filtrar tareas completadas, no las waiting/delegated/in-progress
+        const activeTasks = tasks.filter(t => !t.completed);
         
         // Ordenar tareas por prioridad
         activeTasks.sort((a, b) => this.comparePriority(a.fullLine, b.fullLine));
@@ -728,6 +1110,25 @@ class TasksTimeline {
 
         const header = dayContainer.createEl('div', { cls: 'day-header' });
         header.createEl('span', { text: '⚠️ Retrasadas', cls: 'day-label' });
+
+        // Botón "Postponer" para mover todas las tareas a hoy
+        const postponeBtn = dayContainer.createEl('button', { text: '⏭️ Postponer todas', cls: 'postpone-btn' });
+        postponeBtn.addEventListener('click', async () => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = this.formatDate(today);
+            
+            for (const task of overdueTasks) {
+                try {
+                    await this.updateTaskDate(task.file.path, task.line, task.fullLine, todayStr);
+                } catch (error) {
+                    console.error('Error al postponer tarea:', error);
+                }
+            }
+            
+            // Refrescar después de mover todas
+            setTimeout(() => this.render(), 500);
+        });
 
         const tasksList = dayContainer.createDiv('tasks-list');
 
@@ -792,11 +1193,20 @@ class TasksTimeline {
             }
         });
 
-        const text = taskContent.createSpan({ text: task.text });
+        // Agregar icono de estado si aplica
+        const statusIcon = this.getTaskStatusIcon(task.checkboxState || (task.completed ? 'x' : ' '));
+        if (statusIcon) {
+            const statusSpan = taskContent.createSpan({ text: statusIcon + ' ', cls: 'task-status-icon' });
+        }
+
+        const text = taskContent.createSpan();
         text.classList.add('task-text');
         if (task.completed) {
             text.classList.add('completed');
         }
+        
+        // Procesar texto para enlaces de tareas
+        this.processTaskLinks(text, task.text);
 
         const cancelBtn = taskContent.createEl('button', { text: '✖' });
         cancelBtn.classList.add('task-cancel-btn');
@@ -873,6 +1283,193 @@ class TasksTimeline {
         taskEl.addEventListener('dragend', (e) => {
             taskEl.classList.remove('dragging');
         });
+    }
+
+    processTaskLinks(textElement, taskText) {
+        // Buscar emojis de tareas enlazadas: ⛔ (before) y 🆔 (after)
+        const linkRegex = /(⛔|🆔)\s*([a-zA-Z0-9]+)/g;
+        let lastIndex = 0;
+        let match;
+        
+        let tempText = taskText;
+        const parts = [];
+
+        while ((match = linkRegex.exec(taskText)) !== null) {
+            // Añadir texto antes del enlace
+            if (match.index > lastIndex) {
+                parts.push({ type: 'text', content: taskText.substring(lastIndex, match.index) });
+            }
+
+            // Añadir el enlace
+            parts.push({ 
+                type: 'link', 
+                content: match[0],
+                linkType: match[1],
+                linkId: match[2]
+            });
+            
+            lastIndex = match.index + match[0].length;
+        }
+
+        // Añadir texto restante
+        if (lastIndex < taskText.length) {
+            parts.push({ type: 'text', content: taskText.substring(lastIndex) });
+        }
+
+        // Si no hay enlaces, solo mostrar el texto
+        if (parts.length === 0) {
+            textElement.textContent = taskText;
+            return;
+        }
+
+        // Construir el elemento con enlaces
+        parts.forEach(part => {
+            if (part.type === 'text') {
+                textElement.appendText(part.content);
+            } else {
+                const linkSpan = textElement.createSpan({ text: part.content, cls: 'task-link' });
+                linkSpan.dataset.linkType = part.linkType;
+                linkSpan.dataset.linkId = part.linkId;
+                
+                // Eventos para mostrar overlay
+                linkSpan.addEventListener('mouseenter', (e) => {
+                    this.triggerHovered = true;
+                    this.showTaskOverlay(e, part.linkType, part.linkId);
+                });
+                linkSpan.addEventListener('mouseleave', () => {
+                    this.triggerHovered = false;
+                    // Delay para permitir mover el mouse al overlay
+                    setTimeout(() => {
+                        if (!this.overlayHovered && !this.triggerHovered) {
+                            this.hideTaskOverlay();
+                        }
+                    }, 100);
+                });
+            }
+        });
+    }
+
+    async showTaskOverlay(event, linkType, taskId) {
+        // Limpiar overlay anterior si existe
+        this.hideTaskOverlay();
+        
+        // Buscar la tarea enlazada
+        const linkedTask = await this.findTaskById(taskId);
+        
+        if (!linkedTask) {
+            return;
+        }
+
+        // Crear overlay
+        const overlay = document.body.createDiv('task-overlay');
+        overlay.id = 'task-overlay-' + Date.now();
+
+        const header = overlay.createDiv('task-overlay-header');
+        header.textContent = linkType === '⛔' ? '⛔ Tarea bloqueante' : '🆔 Tarea dependiente';
+
+        const content = overlay.createDiv('task-overlay-content');
+        content.textContent = linkedTask.text;
+
+        const meta = overlay.createDiv('task-overlay-meta');
+        meta.innerHTML = `
+            <div>📄 ${linkedTask.file.name}</div>
+            ${linkedTask.date ? `<div>🛫 ${linkedTask.date}</div>` : ''}
+        `;
+
+        // Posicionar cerca del cursor
+        const rect = event.target.getBoundingClientRect();
+        overlay.style.left = rect.right + 10 + 'px';
+        overlay.style.top = rect.top + 'px';
+
+        // Ajustar si se sale de la pantalla
+        setTimeout(() => {
+            const overlayRect = overlay.getBoundingClientRect();
+            if (overlayRect.right > window.innerWidth) {
+                overlay.style.left = rect.left - overlayRect.width - 10 + 'px';
+            }
+            if (overlayRect.bottom > window.innerHeight) {
+                overlay.style.top = window.innerHeight - overlayRect.height - 10 + 'px';
+            }
+        }, 0);
+
+        // Guardar referencia
+        this.currentOverlay = overlay;
+        this.currentOverlayTrigger = event.target;
+        
+        // Agregar listener para mantener el overlay visible cuando el mouse está sobre él
+        overlay.addEventListener('mouseenter', () => {
+            this.overlayHovered = true;
+        });
+        
+        overlay.addEventListener('mouseleave', () => {
+            this.overlayHovered = false;
+            // Delay para permitir regresar al trigger
+            setTimeout(() => {
+                if (!this.overlayHovered && !this.triggerHovered) {
+                    this.hideTaskOverlay();
+                }
+            }, 100);
+        });
+    }
+
+    hideTaskOverlay() {
+        if (this.currentOverlay) {
+            this.currentOverlay.remove();
+            this.currentOverlay = null;
+            this.currentOverlayTrigger = null;
+            this.overlayHovered = false;
+            this.triggerHovered = false;
+        }
+    }
+
+    async findTaskById(taskId) {
+        // Buscar en todos los archivos markdown
+        let files = this.app.vault.getMarkdownFiles();
+        
+        if (this.config.filter) {
+            files = files.filter(f => f.path.startsWith(this.config.filter));
+        }
+        
+        for (const file of files) {
+            const content = await this.app.vault.read(file);
+            const lines = content.split('\n');
+            
+            for (let index = 0; index < lines.length; index++) {
+                const line = lines[index];
+                const normalizedLine = this.normalizeLine(line);
+                
+                // Buscar tareas que tengan el ID especificado
+                const taskMatch = normalizedLine.match(/^[\s]*[-*]\s+\[[x\-\s\/d]\]/u);
+                if (taskMatch) {
+                    // Buscar el patrón 🆔 seguido del ID en el texto
+                    const idMatch = normalizedLine.match(/🆔\s*([a-zA-Z0-9]+)/);
+                    if (idMatch && idMatch[1] === taskId) {
+                        // Extraer texto de la tarea
+                        let taskText = line
+                            .replace(/^[\s]*[-*]\s+\[[x\-\s\/d]\]/u, '')
+                            .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
+                            .replace(/[🔺⏫🔼🔽⏬]/gu, '')
+                            .replace(/[🔁♻️]/gu, '')
+                            .replace(/#[\w-]+/gu, '')
+                            .replace(/\s+/g, ' ')
+                            .trim();
+                        
+                        // Buscar fecha de inicio
+                        const dateMatch = normalizedLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
+                        
+                        return {
+                            text: taskText || 'Sin descripción',
+                            file: file,
+                            line: index,
+                            date: dateMatch ? dateMatch[1] : null,
+                            fullLine: line
+                        };
+                    }
+                }
+            }
+        }
+        
+        return null;
     }
 
     insertTaskByPriority(parent, task) {
@@ -1310,15 +1907,20 @@ class TasksTimeline {
                 // Normalizar línea solo para búsqueda
                 const normalizedLine = this.normalizeLine(line);
                 
-                const taskMatch = normalizedLine.match(/^[\s]*[-*]\s+\[([x\-\s])\]/u);
+                const taskMatch = normalizedLine.match(/^[\s]*[-*]\s+\[([x\-\s\/d])\]/u);
                 if (taskMatch) {
                     // Buscar fecha de inicio (🛫) en lugar de fecha de vencimiento
                     const dateMatch = normalizedLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
 
                     if (dateMatch && dateMatch[1] === date) {
+                        // Filtrar según el estado y los filtros activos
+                        if (!this.shouldShowTask(taskMatch[1])) {
+                            return;
+                        }
+                        
                         // Extraer texto de la línea ORIGINAL (sin normalizar) para preservar emojis
                         let taskText = line
-                            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '')
+                            .replace(/^[\s]*[-*]\s+\[[x\-\s\/d]\]/u, '')
                             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
                             .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad
                             .replace(/[🔁♻️]/gu, '')
@@ -1333,7 +1935,8 @@ class TasksTimeline {
                             date: dateMatch[1],
                             fullLine: line,  // Guardar línea original
                             completed: taskMatch[1] === 'x',
-                            cancelled: taskMatch[1] === '-'
+                            cancelled: taskMatch[1] === '-',
+                            checkboxState: taskMatch[1]
                         });
                     }
                 }
@@ -1361,15 +1964,20 @@ class TasksTimeline {
                 // Normalizar línea solo para búsqueda
                 const normalizedLine = this.normalizeLine(line);
                 
-                const taskMatch = normalizedLine.match(/^[\s]*[-*]\s+\[([x\-\s])\]/u);
+                const taskMatch = normalizedLine.match(/^[\s]*[-*]\s+\[([x\-\s\/d])\]/u);
                 if (taskMatch) {
                     // Buscar fecha de inicio (🛫) en lugar de fecha de vencimiento
                     const dateMatch = normalizedLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
 
-                    if (dateMatch && dateMatch[1] < todayStr && taskMatch[1] !== 'x' && taskMatch[1] !== '-') {
+                    if (dateMatch && dateMatch[1] < todayStr && taskMatch[1] !== 'x') {
+                        // Filtrar según el estado y los filtros activos
+                        if (!this.shouldShowTask(taskMatch[1])) {
+                            return;
+                        }
+                        
                         // Extraer texto de la línea ORIGINAL para preservar emojis
                         let taskText = line
-                            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '')
+                            .replace(/^[\s]*[-*]\s+\[[x\-\s\/d]\]/u, '')
                             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
                             .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad
                             .replace(/[🔁♻️]/gu, '')
@@ -1384,7 +1992,8 @@ class TasksTimeline {
                             date: dateMatch[1],
                             fullLine: line,  // Guardar línea original
                             completed: false,
-                            cancelled: false
+                            cancelled: false,
+                            checkboxState: taskMatch[1]
                         });
                     }
                 }
@@ -1410,15 +2019,20 @@ class TasksTimeline {
                 // Normalizar línea solo para búsqueda
                 const normalizedLine = this.normalizeLine(line);
                 
-                const taskMatch = normalizedLine.match(/^[\s]*[-*]\s+\[([x\-\s])\]/u);
+                const taskMatch = normalizedLine.match(/^[\s]*[-*]\s+\[([x\-\s\/d])\]/u);
                 if (taskMatch) {
                     // Buscar solo fecha de inicio (🛫)
                     const hasDate = normalizedLine.match(/🛫\s*\d{4}-\d{2}-\d{2}/u);
 
-                    if (!hasDate && taskMatch[1] !== 'x' && taskMatch[1] !== '-') {
+                    if (!hasDate && taskMatch[1] !== 'x') {
+                        // Filtrar según el estado y los filtros activos
+                        if (!this.shouldShowTask(taskMatch[1])) {
+                            return;
+                        }
+                        
                         // Extraer texto de la línea ORIGINAL para preservar emojis
                         let taskText = line
-                            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '')
+                            .replace(/^[\s]*[-*]\s+\[[x\-\s\/d]\]/u, '')
                             .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad
                             .replace(/[🔁♻️]/gu, '')
                             .replace(/#[\w-]+/gu, '')
@@ -1432,7 +2046,8 @@ class TasksTimeline {
                             date: null,
                             fullLine: line,  // Guardar línea original
                             completed: false,
-                            cancelled: false
+                            cancelled: false,
+                            checkboxState: taskMatch[1]
                         });
                     }
                 }
@@ -1470,7 +2085,7 @@ class TasksTimeline {
         const listMarker = listMarkerMatch ? listMarkerMatch[1] : '-';
         
         // Extraer estado del checkbox
-        const checkboxMatch = originalLine.match(/\[([x\-\s])\]/u);
+        const checkboxMatch = originalLine.match(/\[([x\-\s\/d])\]/u);
         const checkboxState = checkboxMatch ? checkboxMatch[1] : ' ';
         
         // Extraer emojis de prioridad de la línea ORIGINAL (sin normalizar)
@@ -1491,7 +2106,7 @@ class TasksTimeline {
         
         // Extraer texto limpio de la línea ORIGINAL
         let taskText = originalLine
-            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '') // Quitar checkbox
+            .replace(/^[\s]*[-*]\s+\[[x\-\s\/d]\]/u, '') // Quitar checkbox
             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '') // Quitar fechas
             .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar prioridad temporalmente
             .replace(/[🔁♻️]/gu, '') // Quitar recurrencia temporalmente
@@ -1551,7 +2166,7 @@ class TasksTimeline {
         const listMarker = listMarkerMatch ? listMarkerMatch[1] : '-';
 
         // Extraer estado del checkbox
-        const checkboxMatch = originalLine.match(/\[([x\-\s])\]/u);
+        const checkboxMatch = originalLine.match(/\[([x\-\s\/d])\]/u);
         const checkboxState = checkboxMatch ? checkboxMatch[1] : ' ';
 
         // Extraer emojis de prioridad de la línea ORIGINAL
@@ -1572,7 +2187,7 @@ class TasksTimeline {
 
         // Extraer texto limpio de la línea ORIGINAL
         let taskText = originalLine
-            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '')
+            .replace(/^[\s]*[-*]\s+\[[x\-\s\/d]\]/u, '')
             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
             .replace(/[🔺⏫🔼🔽⏬]/gu, '')
             .replace(/[🔁♻️]/gu, '')
@@ -1624,7 +2239,7 @@ class TasksTimeline {
         const listMarker = listMarkerMatch ? listMarkerMatch[1] : '-';
 
         // Extraer estado del checkbox
-        const checkboxMatch = originalLine.match(/\[([x\-\s])\]/u);
+        const checkboxMatch = originalLine.match(/\[([x\-\s\/d])\]/u);
         const checkboxState = checkboxMatch ? checkboxMatch[1] : ' ';
 
         // Extraer emojis de recurrencia de la línea ORIGINAL
@@ -1644,7 +2259,7 @@ class TasksTimeline {
 
         // Extraer texto limpio de la línea ORIGINAL
         let taskText = originalLine
-            .replace(/^[\s]*[-*]\s+\[[x\-\s]\]/u, '')
+            .replace(/^[\s]*[-*]\s+\[[x\-\s\/d]\]/u, '')
             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
             .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar prioridad antigua
             .replace(/[🔁♻️]/gu, '')
