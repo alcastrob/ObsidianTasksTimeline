@@ -622,6 +622,8 @@ if (!document.getElementById(cssId)) {
     z-index: 10000;
     max-width: 400px;
     min-width: 250px;
+    max-height: 400px;
+    overflow-y: auto;
 }
 
 .task-overlay-header {
@@ -1291,7 +1293,6 @@ class TasksTimeline {
         let lastIndex = 0;
         let match;
         
-        let tempText = taskText;
         const parts = [];
 
         while ((match = linkRegex.exec(taskText)) !== null) {
@@ -1353,10 +1354,10 @@ class TasksTimeline {
         // Limpiar overlay anterior si existe
         this.hideTaskOverlay();
         
-        // Buscar la tarea enlazada
-        const linkedTask = await this.findTaskById(taskId);
+        // Buscar la(s) tarea(s) enlazada(s) pasando el linkType
+        const linkedTasks = await this.findTasksById(taskId, linkType);
         
-        if (!linkedTask) {
+        if (!linkedTasks || linkedTasks.length === 0) {
             return;
         }
 
@@ -1365,16 +1366,34 @@ class TasksTimeline {
         overlay.id = 'task-overlay-' + Date.now();
 
         const header = overlay.createDiv('task-overlay-header');
-        header.textContent = linkType === '⛔' ? '⛔ Tarea bloqueante' : '🆔 Tarea dependiente';
+        if (linkType === '⛔') {
+            header.textContent = '⛔ Tarea bloqueante';
+        } else {
+            header.textContent = linkedTasks.length > 1 
+                ? `🆔 Tareas dependientes (${linkedTasks.length})`
+                : '🆔 Tarea dependiente';
+        }
 
-        const content = overlay.createDiv('task-overlay-content');
-        content.textContent = linkedTask.text;
+        // Mostrar cada tarea enlazada
+        linkedTasks.forEach((linkedTask, index) => {
+            if (index > 0) {
+                // Separador entre tareas
+                const separator = overlay.createDiv();
+                separator.style.cssText = `
+                    border-top: 1px solid var(--background-modifier-border);
+                    margin: 8px 0;
+                `;
+            }
+            
+            const content = overlay.createDiv('task-overlay-content');
+            content.textContent = linkedTask.text;
 
-        const meta = overlay.createDiv('task-overlay-meta');
-        meta.innerHTML = `
-            <div>📄 ${linkedTask.file.name}</div>
-            ${linkedTask.date ? `<div>🛫 ${linkedTask.date}</div>` : ''}
-        `;
+            const meta = overlay.createDiv('task-overlay-meta');
+            meta.innerHTML = `
+                <div>📄 ${linkedTask.file.name}</div>
+                ${linkedTask.date ? `<div>🛫 ${linkedTask.date}</div>` : ''}
+            `;
+        });
 
         // Posicionar cerca del cursor
         const rect = event.target.getBoundingClientRect();
@@ -1422,13 +1441,21 @@ class TasksTimeline {
         }
     }
 
-    async findTaskById(taskId) {
+    async findTasksById(taskId, linkType) {
         // Buscar en todos los archivos markdown
         let files = this.app.vault.getMarkdownFiles();
         
         if (this.config.filter) {
             files = files.filter(f => f.path.startsWith(this.config.filter));
         }
+        
+        // Determinar qué patrón buscar según el tipo de enlace
+        // ⛔ (before) significa "esta tarea necesita que se complete X primero"
+        //    -> buscar LA tarea que tiene 🆔 X (la que bloquea) - UNA SOLA
+        // 🆔 (after) significa "esta tarea tiene el ID X"
+        //    -> buscar TODAS las tareas que tienen ⛔ X (las que dependen de esta) - MÚLTIPLES
+        const searchPattern = linkType === '⛔' ? '🆔' : '⛔';
+        const foundTasks = [];
         
         for (const file of files) {
             const content = await this.app.vault.read(file);
@@ -1438,11 +1465,12 @@ class TasksTimeline {
                 const line = lines[index];
                 const normalizedLine = this.normalizeLine(line);
                 
-                // Buscar tareas que tengan el ID especificado
+                // Buscar tareas
                 const taskMatch = normalizedLine.match(/^[\s]*[-*]\s+\[[x\-\s\/d]\]/u);
                 if (taskMatch) {
-                    // Buscar el patrón 🆔 seguido del ID en el texto
-                    const idMatch = normalizedLine.match(/🆔\s*([a-zA-Z0-9]+)/);
+                    // Buscar el patrón correcto según el tipo de enlace
+                    const regex = new RegExp(`${searchPattern}\\s*([a-zA-Z0-9]+)`);
+                    const idMatch = normalizedLine.match(regex);
                     if (idMatch && idMatch[1] === taskId) {
                         // Extraer texto de la tarea
                         let taskText = line
@@ -1457,19 +1485,27 @@ class TasksTimeline {
                         // Buscar fecha de inicio
                         const dateMatch = normalizedLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
                         
-                        return {
+                        const taskInfo = {
                             text: taskText || 'Sin descripción',
                             file: file,
                             line: index,
                             date: dateMatch ? dateMatch[1] : null,
                             fullLine: line
                         };
+                        
+                        // Si es ⛔ (before), solo devolver la primera tarea encontrada
+                        if (linkType === '⛔') {
+                            return [taskInfo];
+                        }
+                        
+                        // Si es 🆔 (after), agregar a la lista para devolver todas
+                        foundTasks.push(taskInfo);
                     }
                 }
             }
         }
         
-        return null;
+        return foundTasks;
     }
 
     insertTaskByPriority(parent, task) {
@@ -1913,6 +1949,11 @@ class TasksTimeline {
                     const dateMatch = normalizedLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
 
                     if (dateMatch && dateMatch[1] === date) {
+                        // Excluir tareas canceladas
+                        if (taskMatch[1] === '-') {
+                            return;
+                        }
+                        
                         // Filtrar según el estado y los filtros activos
                         if (!this.shouldShowTask(taskMatch[1])) {
                             return;
@@ -1970,6 +2011,11 @@ class TasksTimeline {
                     const dateMatch = normalizedLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
 
                     if (dateMatch && dateMatch[1] < todayStr && taskMatch[1] !== 'x') {
+                        // Excluir tareas canceladas
+                        if (taskMatch[1] === '-') {
+                            return;
+                        }
+                        
                         // Filtrar según el estado y los filtros activos
                         if (!this.shouldShowTask(taskMatch[1])) {
                             return;
@@ -2025,6 +2071,11 @@ class TasksTimeline {
                     const hasDate = normalizedLine.match(/🛫\s*\d{4}-\d{2}-\d{2}/u);
 
                     if (!hasDate && taskMatch[1] !== 'x') {
+                        // Excluir tareas canceladas
+                        if (taskMatch[1] === '-') {
+                            return;
+                        }
+                        
                         // Filtrar según el estado y los filtros activos
                         if (!this.shouldShowTask(taskMatch[1])) {
                             return;
