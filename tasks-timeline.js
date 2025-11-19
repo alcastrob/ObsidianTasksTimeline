@@ -495,6 +495,56 @@ if (!document.getElementById(cssId)) {
     text-align: center;
 }
 
+/* Búsqueda de tareas */
+.search-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-input {
+    padding: 4px 30px 4px 8px;
+    font-size: 11px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    color: var(--text-normal);
+    border-radius: 6px;
+    outline: none;
+    transition: all 0.2s ease;
+    width: 180px;
+}
+
+.search-input:focus {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.1);
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.clear-search-btn {
+    position: absolute;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    background: var(--background-modifier-hover);
+    color: var(--text-muted);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    transition: all 0.2s ease;
+    display: none;
+}
+
+.clear-search-btn:hover {
+    background: rgba(255, 100, 100, 0.2);
+    color: #ff6464;
+}
+
 .timeline-refresh-btn {
     padding: 8px 16px;
     background: var(--interactive-accent);
@@ -706,6 +756,19 @@ if (!document.getElementById(cssId)) {
     text-decoration-color: var(--text-muted);
 }
 
+/* Wikilinks */
+.wiki-link {
+    cursor: pointer;
+    color: var(--link-color);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.wiki-link:hover {
+    color: var(--link-color-hover);
+    text-decoration: underline;
+}
+
 .task-overlay {
     position: fixed;
     background: var(--background-primary);
@@ -771,7 +834,8 @@ class TasksTimeline {
             showWaiting: true,
             showDelegated: true,
             showNextWeek: true,
-            showNoDate: true
+            showNoDate: true,
+            searchText: ''  // Texto de búsqueda
         };
         
         // Buscar si ya existe un timeline persistente
@@ -870,6 +934,16 @@ class TasksTimeline {
         return true;
     }
 
+    matchesSearchFilter(taskText) {
+        // Si no hay texto de búsqueda, mostrar todas las tareas
+        if (!this.filters.searchText || this.filters.searchText.trim() === '') {
+            return true;
+        }
+        
+        // Buscar el texto en el contenido de la tarea (insensible a mayúsculas)
+        return taskText.toLowerCase().includes(this.filters.searchText);
+    }
+
     async init() {
         this.container.classList.add('tasks-timeline-container');
         await this.render();
@@ -937,6 +1011,47 @@ class TasksTimeline {
         zoomSlider.value = savedZoom;
         
         const zoomValue = zoomControl.createSpan({ text: `${savedZoom}%`, cls: 'zoom-value' });
+        
+        // Campo de búsqueda
+        const searchContainer = leftGroup.createDiv('search-container');
+        searchContainer.style.display = 'flex';
+        searchContainer.style.alignItems = 'center';
+        searchContainer.style.gap = '4px';
+        searchContainer.style.position = 'relative';
+        
+        const searchInput = searchContainer.createEl('input', { 
+            type: 'text',
+            placeholder: '🔎 Buscar tareas...'
+        });
+        searchInput.classList.add('search-input');
+        searchInput.value = this.filters.searchText;
+        
+        const clearSearchBtn = searchContainer.createEl('button', { text: '✖' });
+        clearSearchBtn.classList.add('clear-search-btn');
+        clearSearchBtn.style.display = this.filters.searchText ? 'block' : 'none';
+        
+        // Evento de búsqueda con debounce
+        let searchTimeout;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            const searchText = e.target.value;
+            
+            // Mostrar/ocultar botón de limpiar
+            clearSearchBtn.style.display = searchText ? 'block' : 'none';
+            
+            searchTimeout = setTimeout(() => {
+                this.filters.searchText = searchText.toLowerCase();
+                this.render();
+            }, 300);
+        });
+        
+        // Limpiar búsqueda
+        clearSearchBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            this.filters.searchText = '';
+            clearSearchBtn.style.display = 'none';
+            this.render();
+        });
         
         // Grupo derecho: Botones de control
         const rightGroup = header.createDiv();
@@ -1397,45 +1512,70 @@ class TasksTimeline {
 
     processTaskLinks(textElement, taskText) {
         // Buscar emojis de tareas enlazadas: ⛔ (before) y 🆔 (after)
-        const linkRegex = /(⛔|🆔)\s*([a-zA-Z0-9]+)/g;
-        let lastIndex = 0;
-        let match;
+        // Y wikilinks: [[nombre del enlace]]
+        const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9]+)/g;
+        const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
         
         const parts = [];
-
-        while ((match = linkRegex.exec(taskText)) !== null) {
-            // Añadir texto antes del enlace
-            if (match.index > lastIndex) {
-                parts.push({ type: 'text', content: taskText.substring(lastIndex, match.index) });
-            }
-
-            // Añadir el enlace
-            parts.push({ 
-                type: 'link', 
+        let lastIndex = 0;
+        
+        // Encontrar todas las coincidencias y ordenarlas por posición
+        const allMatches = [];
+        
+        let match;
+        while ((match = taskLinkRegex.exec(taskText)) !== null) {
+            allMatches.push({
+                type: 'taskLink',
+                index: match.index,
+                length: match[0].length,
                 content: match[0],
                 linkType: match[1],
                 linkId: match[2]
             });
-            
-            lastIndex = match.index + match[0].length;
         }
-
+        
+        while ((match = wikiLinkRegex.exec(taskText)) !== null) {
+            allMatches.push({
+                type: 'wikiLink',
+                index: match.index,
+                length: match[0].length,
+                fullMatch: match[0],
+                linkText: match[1]
+            });
+        }
+        
+        // Ordenar por posición
+        allMatches.sort((a, b) => a.index - b.index);
+        
+        // Construir las partes del texto
+        allMatches.forEach(match => {
+            // Añadir texto antes del enlace
+            if (match.index > lastIndex) {
+                parts.push({ type: 'text', content: taskText.substring(lastIndex, match.index) });
+            }
+            
+            // Añadir el enlace
+            parts.push(match);
+            
+            lastIndex = match.index + match.length;
+        });
+        
         // Añadir texto restante
         if (lastIndex < taskText.length) {
             parts.push({ type: 'text', content: taskText.substring(lastIndex) });
         }
-
+        
         // Si no hay enlaces, solo mostrar el texto
         if (parts.length === 0) {
             textElement.appendText(taskText);
             return;
         }
-
+        
         // Construir el elemento con enlaces
         parts.forEach(part => {
             if (part.type === 'text') {
                 textElement.appendText(part.content);
-            } else {
+            } else if (part.type === 'taskLink') {
                 const linkSpan = textElement.createSpan({ text: part.content, cls: 'task-link' });
                 linkSpan.dataset.linkType = part.linkType;
                 linkSpan.dataset.linkId = part.linkId;
@@ -1453,6 +1593,25 @@ class TasksTimeline {
                             this.hideTaskOverlay();
                         }
                     }, 100);
+                });
+            } else if (part.type === 'wikiLink') {
+                const wikiLinkSpan = textElement.createSpan({ text: part.linkText, cls: 'wiki-link' });
+                wikiLinkSpan.dataset.linkTarget = part.linkText;
+                
+                // Evento para abrir el archivo
+                wikiLinkSpan.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    
+                    // Buscar el archivo en el vault
+                    const targetFile = this.app.metadataCache.getFirstLinkpathDest(part.linkText, '');
+                    
+                    if (targetFile) {
+                        // Abrir el archivo en una nueva pestaña
+                        const leaf = this.app.workspace.getLeaf('tab');
+                        await leaf.openFile(targetFile);
+                    } else {
+                        new Notice(`❌ No se encontró el archivo: ${part.linkText}`);
+                    }
                 });
             }
         });
@@ -2343,6 +2502,11 @@ class TasksTimeline {
                             .replace(/\s+/g, ' ')
                             .trim();
 
+                        // Filtrar por texto de búsqueda
+                        if (!this.matchesSearchFilter(taskText)) {
+                            return;
+                        }
+
                         tasks.push({
                             text: taskText || 'Sin descripción',
                             file: file,
@@ -2405,6 +2569,11 @@ class TasksTimeline {
                             .replace(/\s+/g, ' ')
                             .trim();
 
+                        // Filtrar por texto de búsqueda
+                        if (!this.matchesSearchFilter(taskText)) {
+                            return;
+                        }
+
                         tasks.push({
                             text: taskText || 'Sin descripción',
                             file: file,
@@ -2463,6 +2632,11 @@ class TasksTimeline {
                             .replace(/#[\w-]+/gu, '')
                             .replace(/\s+/g, ' ')
                             .trim();
+
+                        // Filtrar por texto de búsqueda
+                        if (!this.matchesSearchFilter(taskText)) {
+                            return;
+                        }
 
                         tasks.push({
                             text: taskText || 'Sin descripción',
