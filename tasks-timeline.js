@@ -830,6 +830,7 @@ class TasksTimeline {
         
         // Filtros de visualización
         this.filters = {
+            showNormal: true,
             showInProgress: true,
             showWaiting: true,
             showDelegated: true,
@@ -927,6 +928,7 @@ class TasksTimeline {
     shouldShowTask(checkboxState) {
         const status = this.getTaskStatus(checkboxState);
         
+        if (status === 'todo' && !this.filters.showNormal) return false;
         if (status === 'in-progress' && !this.filters.showInProgress) return false;
         if (status === 'waiting' && !this.filters.showWaiting) return false;
         if (status === 'delegated' && !this.filters.showDelegated) return false;
@@ -950,7 +952,10 @@ class TasksTimeline {
     }
 
     // Función para comparar prioridades
-    // Orden: 🔺 ⏫ (highest) > 🔼 (high) > sin prioridad > 🔽 (low) > ⏬ (lowest)
+    // Orden: 
+    // 1. Primero: Tareas normales y "en curso" mezcladas por prioridad
+    // 2. Después: Tareas delegadas y "en espera" mezcladas por prioridad
+    // Dentro de cada grupo: 🔺 ⏫ (highest) > 🔼 (high) > sin prioridad > 🔽 (low) > ⏬ (lowest)
     comparePriority(lineA, lineB) {
         const getPriorityValue = (line) => {
             // Limpiar selectores de variación antes de comparar
@@ -962,7 +967,30 @@ class TasksTimeline {
             if (cleanLine.includes('⏬')) return 5;  // lowest
             return 3;  // sin prioridad (medio)
         };
-
+        
+        const getStatusGroup = (line) => {
+            // Extraer el estado del checkbox
+            const checkboxMatch = line.match(/\[([x\- \/wd])\]/);
+            if (!checkboxMatch) return 0; // Por defecto, grupo normal
+            
+            const state = checkboxMatch[1];
+            // Grupo 0: Normal (espacio) y En curso (/)
+            if (state === ' ' || state === '/') return 0;
+            // Grupo 1: En espera (w) y Delegada (d)
+            if (state === 'w' || state === 'd') return 1;
+            // Otros estados (completada, cancelada, etc.)
+            return 2;
+        };
+        
+        const groupA = getStatusGroup(lineA);
+        const groupB = getStatusGroup(lineB);
+        
+        // Si están en grupos diferentes, ordenar por grupo
+        if (groupA !== groupB) {
+            return groupA - groupB;
+        }
+        
+        // Si están en el mismo grupo, ordenar por prioridad
         return getPriorityValue(lineA) - getPriorityValue(lineB);
     }
 
@@ -1136,6 +1164,17 @@ class TasksTimeline {
         statusDropdownBtn.style.visibility = 'visible';
         
         const statusDropdownMenu = statusDropdownContainer.createDiv('filter-dropdown-menu');
+        
+        // Opción: No comenzadas
+        const normalOption = statusDropdownMenu.createDiv('filter-option');
+        const normalCheckbox = normalOption.createDiv('filter-checkbox');
+        if (this.filters.showNormal) normalCheckbox.classList.add('checked');
+        normalOption.createSpan({ text: '⚪ No comenzadas', cls: 'filter-option-label' });
+        normalOption.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.filters.showNormal = !this.filters.showNormal;
+            this.render();
+        });
         
         // Opción: En curso
         const inProgressOption = statusDropdownMenu.createDiv('filter-option');
@@ -1796,19 +1835,40 @@ class TasksTimeline {
             return 3;  // sin prioridad (medio)
         };
         
-        const newTaskPriority = getPriorityValue(task.fullLine);
+        const getStatusGroup = (line) => {
+            // Extraer el estado del checkbox
+            const checkboxMatch = line.match(/\[([x\- \/wd])\]/);
+            if (!checkboxMatch) return 0; // Por defecto, grupo normal
+            
+            const state = checkboxMatch[1];
+            // Grupo 0: Normal (espacio) y En curso (/)
+            if (state === ' ' || state === '/') return 0;
+            // Grupo 1: En espera (w) y Delegada (d)
+            if (state === 'w' || state === 'd') return 1;
+            // Otros estados (completada, cancelada, etc.)
+            return 2;
+        };
         
-        // Encontrar la posición correcta según la prioridad
+        const newTaskPriority = getPriorityValue(task.fullLine);
+        const newTaskGroup = getStatusGroup(task.fullLine);
+        
+        // Encontrar la posición correcta según grupo y prioridad
         let insertIndex = -1;
         for (let i = 0; i < existingTasks.length; i++) {
             try {
                 const existingTaskData = JSON.parse(existingTasks[i].dataset.taskData);
                 const existingFullLine = existingTaskData.fullLine || '';
                 const existingPriority = getPriorityValue(existingFullLine);
+                const existingGroup = getStatusGroup(existingFullLine);
                 
-                // Si la nueva tarea tiene mayor prioridad (menor valor),
-                // debe insertarse antes de la tarea existente
-                if (newTaskPriority < existingPriority) {
+                // Primero comparar por grupo
+                if (newTaskGroup < existingGroup) {
+                    insertIndex = i;
+                    break;
+                }
+                
+                // Si están en el mismo grupo, comparar por prioridad
+                if (newTaskGroup === existingGroup && newTaskPriority < existingPriority) {
                     insertIndex = i;
                     break;
                 }
