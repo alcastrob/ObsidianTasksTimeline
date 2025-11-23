@@ -1,9 +1,9 @@
 /**
- * Tasks Timeline - Dataview View v2.0
+ * Tasks Timeline - Dataview View v2.1
  * 
  * Uso:
  * ```dataviewjs
- * await dv.view("tasks-timeline", {filter: "Proyectos/"})
+ * await dv.view("tasks-timeline", {filter: "Proyectos/", daysView: "nextWeek"})
  * ```
  */
 
@@ -1098,59 +1098,61 @@ class TasksTimeline {
         refreshBtn.style.fontWeight = 'normal';
         refreshBtn.addEventListener('click', () => this.render());
         
-        // Dropdown de Columnas
-        const columnDropdownContainer = rightGroup.createDiv('filter-dropdown-container');
-        columnDropdownContainer.style.display = 'inline-block';
-        columnDropdownContainer.style.position = 'relative';
-        columnDropdownContainer.style.visibility = 'visible';
-        columnDropdownContainer.style.opacity = '1';
-        
-        const columnDropdownBtn = columnDropdownContainer.createEl('button', { text: '📋 Columnas ▼', cls: 'filter-dropdown-btn' });
-        columnDropdownBtn.style.display = 'inline-flex';
-        columnDropdownBtn.style.visibility = 'visible';
-        
-        const columnDropdownMenu = columnDropdownContainer.createDiv('filter-dropdown-menu');
-        
-        // Opción: Próxima semana
-        const nextWeekOption = columnDropdownMenu.createDiv('filter-option');
-        const nextWeekCheckbox = nextWeekOption.createDiv('filter-checkbox');
-        if (this.filters.showNextWeek) nextWeekCheckbox.classList.add('checked');
-        nextWeekOption.createSpan({ text: 'Próxima semana', cls: 'filter-option-label' });
-        nextWeekOption.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.filters.showNextWeek = !this.filters.showNextWeek;
-            this.render();
-        });
-        
-        // Opción: Sin fecha
-        const noDateOption = columnDropdownMenu.createDiv('filter-option');
-        const noDateCheckbox = noDateOption.createDiv('filter-checkbox');
-        if (this.filters.showNoDate) noDateCheckbox.classList.add('checked');
-        noDateOption.createSpan({ text: 'Sin fecha', cls: 'filter-option-label' });
-        noDateOption.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.filters.showNoDate = !this.filters.showNoDate;
-            this.render();
-        });
-        
-        // Toggle del dropdown de columnas
-        columnDropdownBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const isOpen = columnDropdownMenu.classList.contains('show');
+        // Dropdown de Columnas (solo si NO estamos en modo nextWeek)
+        if (this.config.daysView !== 'nextWeek') {
+            const columnDropdownContainer = rightGroup.createDiv('filter-dropdown-container');
+            columnDropdownContainer.style.display = 'inline-block';
+            columnDropdownContainer.style.position = 'relative';
+            columnDropdownContainer.style.visibility = 'visible';
+            columnDropdownContainer.style.opacity = '1';
             
-            // Cerrar todos los otros dropdowns
-            document.querySelectorAll('.filter-dropdown-menu.show').forEach(menu => {
-                menu.classList.remove('show');
-            });
-            document.querySelectorAll('.filter-dropdown-btn.open').forEach(btn => {
-                btn.classList.remove('open');
+            const columnDropdownBtn = columnDropdownContainer.createEl('button', { text: '📋 Columnas ▼', cls: 'filter-dropdown-btn' });
+            columnDropdownBtn.style.display = 'inline-flex';
+            columnDropdownBtn.style.visibility = 'visible';
+            
+            const columnDropdownMenu = columnDropdownContainer.createDiv('filter-dropdown-menu');
+            
+            // Opción: Próxima semana
+            const nextWeekOption = columnDropdownMenu.createDiv('filter-option');
+            const nextWeekCheckbox = nextWeekOption.createDiv('filter-checkbox');
+            if (this.filters.showNextWeek) nextWeekCheckbox.classList.add('checked');
+            nextWeekOption.createSpan({ text: 'Próxima semana', cls: 'filter-option-label' });
+            nextWeekOption.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.filters.showNextWeek = !this.filters.showNextWeek;
+                this.render();
             });
             
-            if (!isOpen) {
-                columnDropdownMenu.classList.add('show');
-                columnDropdownBtn.classList.add('open');
-            }
-        });
+            // Opción: Sin fecha
+            const noDateOption = columnDropdownMenu.createDiv('filter-option');
+            const noDateCheckbox = noDateOption.createDiv('filter-checkbox');
+            if (this.filters.showNoDate) noDateCheckbox.classList.add('checked');
+            noDateOption.createSpan({ text: 'Sin fecha', cls: 'filter-option-label' });
+            noDateOption.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.filters.showNoDate = !this.filters.showNoDate;
+                this.render();
+            });
+            
+            // Toggle del dropdown de columnas
+            columnDropdownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isOpen = columnDropdownMenu.classList.contains('show');
+                
+                // Cerrar todos los otros dropdowns
+                document.querySelectorAll('.filter-dropdown-menu.show').forEach(menu => {
+                    menu.classList.remove('show');
+                });
+                document.querySelectorAll('.filter-dropdown-btn.open').forEach(btn => {
+                    btn.classList.remove('open');
+                });
+                
+                if (!isOpen) {
+                    columnDropdownMenu.classList.add('show');
+                    columnDropdownBtn.classList.add('open');
+                }
+            });
+        }
         
         // Dropdown de Estados
         const statusDropdownContainer = rightGroup.createDiv('filter-dropdown-container');
@@ -1262,50 +1264,82 @@ class TasksTimeline {
         today.setHours(0, 0, 0, 0);
         const dayOfWeek = today.getDay();
 
-        // Calcular cuántos días mostrar según el modo
-        let maxDaysToShow = Infinity;
-        if (this.config.daysView !== "full") {
-            const match = this.config.daysView.match(/^(\d+)\s*days?$/i);
-            if (match) {
-                maxDaysToShow = parseInt(match[1]);
-            }
-        }
+        // Verificar si estamos en modo nextWeek
+        const isNextWeekMode = this.config.daysView === 'nextWeek';
 
-        // Siempre mostrar tareas atrasadas
-        await this.createOverdueContainer(timelineMain, today);
-        
-        // Mostrar "Hoy" (siempre)
-        await this.createDayContainer(timelineMain, 'Hoy', 0, today);
-        let daysShown = 1;
-
-        // Mostrar días adicionales según el modo
-        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-            const daysUntilFriday = 5 - dayOfWeek;
-            const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        if (isNextWeekMode) {
+            // Modo nextWeek: Mostrar los 5 días de la próxima semana
             
-            for (let i = 1; i <= daysUntilFriday && daysShown < maxDaysToShow; i++) {
-                const futureDate = new Date(today);
-                futureDate.setDate(today.getDate() + i);
-                const dayName = dayNames[futureDate.getDay()];
-                await this.createDayContainer(timelineMain, dayName, i, today);
-                daysShown++;
-            }
-        }
-
-        // Mostrar "Próxima Semana" si el filtro está activo
-        if (this.filters.showNextWeek) {
+            // Calcular el lunes de la próxima semana
             let daysUntilNextMonday;
             if (dayOfWeek === 0) {
                 daysUntilNextMonday = 1;
             } else {
                 daysUntilNextMonday = 8 - dayOfWeek;
             }
-            await this.createDayContainer(timelineMain, 'Próxima Semana', daysUntilNextMonday, today);
-        }
 
-        // Mostrar "Sin Fecha" si el filtro está activo
-        if (this.filters.showNoDate) {
-            await this.createNoDateContainer(timelineMain);
+            // Siempre mostrar tareas atrasadas (si las hay)
+            await this.createOverdueContainer(timelineMain, today);
+
+            // Mostrar los 5 días de la próxima semana (Lunes a Viernes)
+            const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+            for (let i = 0; i < 5; i++) {
+                const offset = daysUntilNextMonday + i;
+                await this.createDayContainer(timelineMain, dayNames[i], offset, today);
+            }
+
+            // Mostrar "Sin Fecha" si el filtro está activo
+            if (this.filters.showNoDate) {
+                await this.createNoDateContainer(timelineMain);
+            }
+        } else {
+            // Modo normal: Comportamiento original
+
+            // Calcular cuántos días mostrar según el modo
+            let maxDaysToShow = Infinity;
+            if (this.config.daysView !== "full") {
+                const match = this.config.daysView.match(/^(\d+)\s*days?$/i);
+                if (match) {
+                    maxDaysToShow = parseInt(match[1]);
+                }
+            }
+
+            // Siempre mostrar tareas atrasadas
+            await this.createOverdueContainer(timelineMain, today);
+            
+            // Mostrar "Hoy" (siempre)
+            await this.createDayContainer(timelineMain, 'Hoy', 0, today);
+            let daysShown = 1;
+
+            // Mostrar días adicionales según el modo
+            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                const daysUntilFriday = 5 - dayOfWeek;
+                const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+                
+                for (let i = 1; i <= daysUntilFriday && daysShown < maxDaysToShow; i++) {
+                    const futureDate = new Date(today);
+                    futureDate.setDate(today.getDate() + i);
+                    const dayName = dayNames[futureDate.getDay()];
+                    await this.createDayContainer(timelineMain, dayName, i, today);
+                    daysShown++;
+                }
+            }
+
+            // Mostrar "Próxima Semana" si el filtro está activo
+            if (this.filters.showNextWeek) {
+                let daysUntilNextMonday;
+                if (dayOfWeek === 0) {
+                    daysUntilNextMonday = 1;
+                } else {
+                    daysUntilNextMonday = 8 - dayOfWeek;
+                }
+                await this.createDayContainer(timelineMain, 'Próxima Semana', daysUntilNextMonday, today);
+            }
+
+            // Mostrar "Sin Fecha" si el filtro está activo
+            if (this.filters.showNoDate) {
+                await this.createNoDateContainer(timelineMain);
+            }
         }
     }
     
