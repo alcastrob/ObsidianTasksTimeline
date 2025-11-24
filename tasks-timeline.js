@@ -1,5 +1,5 @@
 /**
- * Tasks Timeline - Dataview View v2.1
+ * Tasks Timeline - Dataview View v2.2
  * 
  * Uso:
  * ```dataviewjs
@@ -11,11 +11,11 @@
 const timelineId = 'tasks-timeline-' + Date.now();
 
 // CSS embebido directamente en el código
-const cssId = 'tasks-timeline-css-v24';
+const cssId = 'tasks-timeline-css-v25';
 
 // Eliminar versiones antiguas del CSS
 const oldCssVersions = [];
-for (let i = 0; i <= 23; i++) {
+for (let i = 0; i <= 24; i++) {
     if (i === 0) oldCssVersions.push('tasks-timeline-css');
     else oldCssVersions.push(`tasks-timeline-css-v${i}`);
 }
@@ -45,13 +45,25 @@ if (!document.getElementById(cssId)) {
     box-sizing: border-box;
 }
 
+/* Wrapper para zoom - permite que el contenido escalado se muestre completo */
+.zoom-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    position: relative;
+    min-height: 400px;
+}
+
 .timeline-main {
     display: flex !important;
     gap: 15px !important;
     margin: 0;
     padding: 10px 0;
-    overflow-x: auto;
+    overflow-x: visible;
+    overflow-y: visible;
     min-height: 400px;
+    width: fit-content;
+    min-width: 100%;
 }
 
 .day-container {
@@ -586,6 +598,25 @@ if (!document.getElementById(cssId)) {
     background: var(--text-muted);
 }
 
+/* Scrollbar para zoom-wrapper (scroll horizontal principal) */
+.zoom-wrapper::-webkit-scrollbar {
+    height: 10px;
+}
+
+.zoom-wrapper::-webkit-scrollbar-track {
+    background: var(--background-secondary);
+    border-radius: 5px;
+}
+
+.zoom-wrapper::-webkit-scrollbar-thumb {
+    background: var(--background-modifier-border);
+    border-radius: 5px;
+}
+
+.zoom-wrapper::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
 .tasks-list::-webkit-scrollbar {
     width: 6px;
 }
@@ -809,6 +840,84 @@ if (!document.getElementById(cssId)) {
 .task-status-icon {
     display: inline;
 }
+
+/* Etiquetas (Tags) como píldoras */
+.task-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 0 4px 4px 0;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.9;
+    white-space: nowrap;
+}
+
+.task-tag:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Barra de etiquetas */
+.tags-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--background-secondary);
+    border-radius: 12px;
+    border: 2px solid var(--background-modifier-border);
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    min-height: 40px;
+}
+
+.tags-bar-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-right: 8px;
+    white-space: nowrap;
+}
+
+.tags-bar-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.tags-bar-tag:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.tags-bar-count {
+    margin-left: 6px;
+    font-size: 10px;
+    opacity: 0.8;
+    font-weight: 700;
+}
+
+.tags-bar-empty {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+/* Ajuste del zoom para scroll horizontal */
+.timeline-main {
+    transform-origin: top left !important;
+}
     `;
 
     document.head.appendChild(style);
@@ -1000,6 +1109,27 @@ class TasksTimeline {
         return line.replace(/[\uFE0E\uFE0F]/g, '');
     }
 
+    extractTags(text) {
+        // Extraer todas las etiquetas del formato #etiqueta
+        const tagRegex = /#[\w\-áéíóúñü]+/gi;
+        const tags = text.match(tagRegex) || [];
+        return tags.map(tag => tag.toLowerCase());
+    }
+
+    getColorForTag(tag) {
+        // Generar color consistente basado en hash del tag
+        let hash = 0;
+        for (let i = 0; i < tag.length; i++) {
+            hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        
+        const hue = Math.abs(hash % 360);
+        const saturation = 60 + (Math.abs(hash) % 20); // 60-80%
+        const lightness = 45 + (Math.abs(hash >> 8) % 15); // 45-60%
+        
+        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    }
+
     async render() {
         this.container.empty();
 
@@ -1069,7 +1199,7 @@ class TasksTimeline {
             
             searchTimeout = setTimeout(() => {
                 this.filters.searchText = searchText.toLowerCase();
-                this.render();
+                this.applySearchFilter();
             }, 300);
         });
         
@@ -1078,7 +1208,7 @@ class TasksTimeline {
             searchInput.value = '';
             this.filters.searchText = '';
             clearSearchBtn.style.display = 'none';
-            this.render();
+            this.applySearchFilter();
         });
         
         // Grupo derecho: Botones de control
@@ -1175,7 +1305,8 @@ class TasksTimeline {
         normalOption.addEventListener('click', (e) => {
             e.stopPropagation();
             this.filters.showNormal = !this.filters.showNormal;
-            this.render();
+            normalCheckbox.classList.toggle('checked');
+            this.applyStatusFilters();
         });
         
         // Opción: En curso
@@ -1186,7 +1317,8 @@ class TasksTimeline {
         inProgressOption.addEventListener('click', (e) => {
             e.stopPropagation();
             this.filters.showInProgress = !this.filters.showInProgress;
-            this.render();
+            inProgressCheckbox.classList.toggle('checked');
+            this.applyStatusFilters();
         });
         
         // Opción: En espera
@@ -1197,7 +1329,8 @@ class TasksTimeline {
         waitingOption.addEventListener('click', (e) => {
             e.stopPropagation();
             this.filters.showWaiting = !this.filters.showWaiting;
-            this.render();
+            waitingCheckbox.classList.toggle('checked');
+            this.applyStatusFilters();
         });
         
         // Opción: Delegadas
@@ -1208,7 +1341,8 @@ class TasksTimeline {
         delegatedOption.addEventListener('click', (e) => {
             e.stopPropagation();
             this.filters.showDelegated = !this.filters.showDelegated;
-            this.render();
+            delegatedCheckbox.classList.toggle('checked');
+            this.applyStatusFilters();
         });
         
         // Toggle del dropdown de estados
@@ -1245,18 +1379,80 @@ class TasksTimeline {
             document.addEventListener('click', closeDropdowns);
         }, 0);
 
-        const timelineMain = this.container.createDiv('timeline-main');
+        // Barra de etiquetas (se actualizará después de cargar las tareas)
+        const tagsBar = this.container.createDiv('tags-bar');
+        tagsBar.style.display = 'none'; // Oculto inicialmente
+        this.tagsBar = tagsBar; // Guardar referencia
 
-        // Aplicar zoom inicial centrado
+        // Crear wrapper de zoom para manejar el escalado correctamente
+        const zoomWrapper = this.container.createDiv('zoom-wrapper');
+        zoomWrapper.style.cssText = `
+            width: 100%;
+            overflow-x: auto;
+            overflow-y: visible;
+            position: relative;
+        `;
+
+        const timelineMain = zoomWrapper.createDiv('timeline-main');
+
+        // Aplicar zoom inicial desde top-left
         const zoomPercent = parseInt(savedZoom);
-        timelineMain.style.transform = `scale(${zoomPercent / 100})`;
-        timelineMain.style.transformOrigin = 'top center';
+        const scale = zoomPercent / 100;
+        
+        // Función para aplicar zoom correctamente
+        const applyZoom = (scaleValue) => {
+            const prevScrollLeft = timelineMain.scrollLeft;
+            const prevScrollTop = zoomWrapper.scrollTop;
+            
+            // Paso 1: Preparar el navegador para la transformación
+            timelineMain.style.willChange = 'transform';
+            
+            // Paso 2: Aplicar el scale
+            timelineMain.style.transform = `scale(${scaleValue})`;
+            timelineMain.style.transformOrigin = 'top left';
+            
+            // Paso 3: Forzar múltiples reflows para asegurar renderizado completo
+            // Esto es crítico para que las columnas fuera de vista se rendericen
+            requestAnimationFrame(() => {
+                // Primer reflow
+                const currentHeight = timelineMain.scrollHeight;
+                const currentWidth = timelineMain.scrollWidth;
+                
+                // Ajustar el height del wrapper
+                zoomWrapper.style.minHeight = `${currentHeight * scaleValue}px`;
+                
+                // Segundo reflow - forzar con getBoundingClientRect
+                timelineMain.getBoundingClientRect();
+                
+                requestAnimationFrame(() => {
+                    // Tercer reflow - cambiar y restaurar display
+                    const prevDisplay = timelineMain.style.display;
+                    timelineMain.style.display = 'none';
+                    timelineMain.offsetHeight; // Trigger reflow
+                    timelineMain.style.display = prevDisplay || 'flex';
+                    
+                    // Cuarto reflow - ajustar scroll
+                    requestAnimationFrame(() => {
+                        timelineMain.scrollLeft = prevScrollLeft;
+                        zoomWrapper.scrollTop = prevScrollTop;
+                        
+                        // Limpiar will-change después de la animación
+                        setTimeout(() => {
+                            timelineMain.style.willChange = 'auto';
+                        }, 300);
+                    });
+                });
+            });
+        };
+        
+        applyZoom(scale);
         
         // Event listener para el slider de zoom
         zoomSlider.addEventListener('input', (e) => {
             const zoom = e.target.value;
+            const newScale = zoom / 100;
             zoomValue.textContent = `${zoom}%`;
-            timelineMain.style.transform = `scale(${zoom / 100})`;
+            applyZoom(newScale);
             localStorage.setItem('tasks-timeline-zoom', zoom);
         });
 
@@ -1341,6 +1537,183 @@ class TasksTimeline {
                 await this.createNoDateContainer(timelineMain);
             }
         }
+
+        // Actualizar barra de etiquetas después de crear todas las columnas
+        this.updateTagsBar();
+    }
+
+    updateTagsBar() {
+        const tagsBar = this.tagsBar;
+        if (!tagsBar) return;
+
+        tagsBar.empty();
+
+        // Recolectar todas las etiquetas visibles en las tareas actuales
+        const tagCounts = {};
+        const taskItems = this.container.querySelectorAll('.task-item:not([style*="display: none"])');
+        
+        taskItems.forEach(taskItem => {
+            const taskLine = taskItem.getAttribute('data-task-line');
+            if (taskLine) {
+                const tags = this.extractTags(taskLine);
+                tags.forEach(tag => {
+                    tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                });
+            }
+        });
+
+        const uniqueTags = Object.keys(tagCounts);
+
+        if (uniqueTags.length === 0) {
+            tagsBar.style.display = 'none';
+            return;
+        }
+
+        tagsBar.style.display = 'flex';
+
+        // Label
+        const label = tagsBar.createSpan({ text: '🏷️ Etiquetas:', cls: 'tags-bar-label' });
+
+        // Ordenar tags alfabéticamente
+        uniqueTags.sort();
+
+        // Crear botón para cada tag
+        uniqueTags.forEach(tag => {
+            const tagButton = tagsBar.createDiv('tags-bar-tag');
+            const color = this.getColorForTag(tag);
+            tagButton.style.background = color;
+            tagButton.style.color = '#ffffff';
+            
+            const tagText = tagButton.createSpan({ text: tag });
+            const countSpan = tagButton.createSpan({ 
+                text: `(${tagCounts[tag]})`, 
+                cls: 'tags-bar-count' 
+            });
+
+            // Click en tag para agregar al filtro de búsqueda
+            tagButton.addEventListener('click', () => {
+                const searchInput = this.container.querySelector('.search-input');
+                if (searchInput) {
+                    // Si ya está en el filtro, no agregarlo de nuevo
+                    if (!searchInput.value.includes(tag)) {
+                        searchInput.value = searchInput.value ? `${searchInput.value} ${tag}` : tag;
+                        this.filters.searchText = searchInput.value.toLowerCase();
+                        
+                        // Mostrar botón de limpiar
+                        const clearBtn = this.container.querySelector('.clear-search-btn');
+                        if (clearBtn) {
+                            clearBtn.style.display = 'block';
+                        }
+
+                        // Aplicar filtro sin re-render
+                        this.applySearchFilter();
+                    }
+                }
+            });
+
+            tagButton.title = `Click para filtrar por ${tag}`;
+        });
+    }
+
+    applySearchFilter() {
+        // Aplicar filtro de búsqueda sin re-render completo
+        const searchText = this.filters.searchText;
+        const taskItems = this.container.querySelectorAll('.task-item');
+        
+        taskItems.forEach(taskItem => {
+            const taskLine = taskItem.getAttribute('data-task-line') || '';
+            const taskText = taskLine.toLowerCase();
+            
+            // Verificar si coincide con el filtro de búsqueda
+            const matchesSearch = !searchText || taskText.includes(searchText);
+            
+            // Mostrar/ocultar con transición
+            if (matchesSearch) {
+                taskItem.style.display = '';
+                taskItem.style.opacity = '1';
+                taskItem.style.transform = 'translateX(0)';
+            } else {
+                taskItem.style.opacity = '0';
+                taskItem.style.transform = 'translateX(-10px)';
+                setTimeout(() => {
+                    if (!taskText.includes(this.filters.searchText)) {
+                        taskItem.style.display = 'none';
+                    }
+                }, 200);
+            }
+        });
+        
+        // Actualizar barra de etiquetas para reflejar solo tags visibles
+        this.updateTagsBar();
+        
+        // Actualizar mensajes "Sin tareas" en columnas vacías
+        this.updateEmptyMessages();
+    }
+    
+    updateEmptyMessages() {
+        // Actualizar los mensajes "Sin tareas" en cada columna
+        const columns = this.container.querySelectorAll('.tasks-list');
+        
+        columns.forEach(column => {
+            const visibleTasks = Array.from(column.querySelectorAll('.task-item'))
+                .filter(task => task.style.display !== 'none');
+            
+            let emptyMsg = column.querySelector('.empty-message');
+            
+            if (visibleTasks.length === 0) {
+                if (!emptyMsg) {
+                    emptyMsg = column.createDiv('empty-message');
+                    emptyMsg.setText('Sin tareas');
+                }
+            } else {
+                if (emptyMsg) {
+                    emptyMsg.remove();
+                }
+            }
+        });
+    }
+
+    applyStatusFilters() {
+        // Aplicar filtros de estado sin re-render completo
+        const taskItems = this.container.querySelectorAll('.task-item');
+        
+        taskItems.forEach(taskItem => {
+            const status = taskItem.getAttribute('data-status') || ' ';
+            let shouldShow = true;
+            
+            // Determinar si debe mostrarse según los filtros
+            if (status === ' ' && !this.filters.showNormal) shouldShow = false;
+            else if (status === '/' && !this.filters.showInProgress) shouldShow = false;
+            else if (status === 'w' && !this.filters.showWaiting) shouldShow = false;
+            else if (status === 'd' && !this.filters.showDelegated) shouldShow = false;
+            
+            // También aplicar filtro de búsqueda si está activo
+            if (shouldShow && this.filters.searchText) {
+                const taskLine = taskItem.getAttribute('data-task-line') || '';
+                shouldShow = taskLine.toLowerCase().includes(this.filters.searchText);
+            }
+            
+            // Mostrar/ocultar con transición
+            if (shouldShow) {
+                taskItem.style.display = '';
+                setTimeout(() => {
+                    taskItem.style.opacity = '1';
+                    taskItem.style.transform = 'translateX(0)';
+                }, 10);
+            } else {
+                taskItem.style.opacity = '0';
+                taskItem.style.transform = 'translateX(-10px)';
+                setTimeout(() => {
+                    taskItem.style.display = 'none';
+                }, 200);
+            }
+        });
+        
+        // Actualizar barra de etiquetas
+        setTimeout(() => {
+            this.updateTagsBar();
+            this.updateEmptyMessages();
+        }, 250);
     }
     
 
@@ -1457,6 +1830,8 @@ class TasksTimeline {
         const taskId = `task-${task.file.path.replace(/[^a-zA-Z0-9]/g, '_')}-${task.line}`;
         taskEl.id = taskId;
         taskEl.setAttribute('draggable', 'true');
+        taskEl.setAttribute('data-task-line', task.fullLine || task.text);
+        taskEl.setAttribute('data-status', task.checkboxState || ' ');
 
         const taskContent = taskEl.createDiv('task-content');
 
@@ -1585,9 +1960,11 @@ class TasksTimeline {
 
     processTaskLinks(textElement, taskText) {
         // Buscar emojis de tareas enlazadas: ⛔ (before) y 🆔 (after)
-        // Y wikilinks: [[nombre del enlace]]
+        // Wikilinks: [[nombre del enlace]]
+        // Y etiquetas: #etiqueta
         const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9]+)/g;
         const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+        const tagRegex = /#[\w\-áéíóúñü]+/gi;
         
         const parts = [];
         let lastIndex = 0;
@@ -1607,6 +1984,8 @@ class TasksTimeline {
             });
         }
         
+        // Reset lastIndex for wikiLinkRegex
+        wikiLinkRegex.lastIndex = 0;
         while ((match = wikiLinkRegex.exec(taskText)) !== null) {
             allMatches.push({
                 type: 'wikiLink',
@@ -1617,17 +1996,28 @@ class TasksTimeline {
             });
         }
         
+        // Reset lastIndex for tagRegex
+        tagRegex.lastIndex = 0;
+        while ((match = tagRegex.exec(taskText)) !== null) {
+            allMatches.push({
+                type: 'tag',
+                index: match.index,
+                length: match[0].length,
+                tagText: match[0]
+            });
+        }
+        
         // Ordenar por posición
         allMatches.sort((a, b) => a.index - b.index);
         
         // Construir las partes del texto
         allMatches.forEach(match => {
-            // Añadir texto antes del enlace
+            // Añadir texto antes del match
             if (match.index > lastIndex) {
                 parts.push({ type: 'text', content: taskText.substring(lastIndex, match.index) });
             }
             
-            // Añadir el enlace
+            // Añadir el match
             parts.push(match);
             
             lastIndex = match.index + match.length;
@@ -1638,13 +2028,13 @@ class TasksTimeline {
             parts.push({ type: 'text', content: taskText.substring(lastIndex) });
         }
         
-        // Si no hay enlaces, solo mostrar el texto
+        // Si no hay matches, solo mostrar el texto
         if (parts.length === 0) {
             textElement.appendText(taskText);
             return;
         }
         
-        // Construir el elemento con enlaces
+        // Construir el elemento con enlaces y etiquetas
         parts.forEach(part => {
             if (part.type === 'text') {
                 textElement.appendText(part.content);
@@ -1686,6 +2076,32 @@ class TasksTimeline {
                         new Notice(`❌ No se encontró el archivo: ${part.linkText}`);
                     }
                 });
+            } else if (part.type === 'tag') {
+                const tagSpan = textElement.createSpan({ text: part.tagText, cls: 'task-tag' });
+                const color = this.getColorForTag(part.tagText.toLowerCase());
+                tagSpan.style.background = color;
+                tagSpan.style.color = '#ffffff';
+                
+                // Click en tag para filtrar
+                tagSpan.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const searchInput = this.container.querySelector('.search-input');
+                    if (searchInput) {
+                        if (!searchInput.value.includes(part.tagText.toLowerCase())) {
+                            searchInput.value = searchInput.value ? `${searchInput.value} ${part.tagText.toLowerCase()}` : part.tagText.toLowerCase();
+                            this.filters.searchText = searchInput.value.toLowerCase();
+                            
+                            const clearBtn = this.container.querySelector('.clear-search-btn');
+                            if (clearBtn) {
+                                clearBtn.style.display = 'block';
+                            }
+                            
+                            this.applySearchFilter();
+                        }
+                    }
+                });
+                
+                tagSpan.title = `Click para filtrar por ${part.tagText}`;
             }
         });
     }
@@ -2363,6 +2779,9 @@ class TasksTimeline {
                     task.checkboxState = status.value;
                     currentStatus = status.value;
                     
+                    // Actualizar el data-status del elemento
+                    taskEl.setAttribute('data-status', status.value);
+                    
                     // Actualizar el botón
                     statusButton.textContent = status.emoji;
                     
@@ -2376,12 +2795,29 @@ class TasksTimeline {
                     dropdown.style.display = 'none';
                     dropdown.style.visibility = 'visible';
                     
-                    // Refrescar la vista para mostrar/ocultar el icono de estado
-                    setTimeout(() => {
-                        this.render();
-                        const timelineMain = this.container.querySelector('.timeline-main');
-                        if (timelineMain) timelineMain.scrollLeft = scrollPos;
-                    }, 100);
+                    // Actualizar el icono de estado en el texto
+                    const taskText = taskEl.querySelector('.task-text');
+                    if (taskText) {
+                        const statusIconEl = taskText.querySelector('.task-status-icon');
+                        const newStatusIcon = this.getTaskStatusIcon(status.value);
+                        
+                        if (newStatusIcon && !statusIconEl) {
+                            // Agregar icono si no existe
+                            const iconSpan = document.createElement('span');
+                            iconSpan.className = 'task-status-icon';
+                            iconSpan.textContent = newStatusIcon + ' ';
+                            taskText.insertBefore(iconSpan, taskText.firstChild);
+                        } else if (newStatusIcon && statusIconEl) {
+                            // Actualizar icono existente
+                            statusIconEl.textContent = newStatusIcon + ' ';
+                        } else if (!newStatusIcon && statusIconEl) {
+                            // Remover icono si ya no es necesario
+                            statusIconEl.remove();
+                        }
+                    }
+                    
+                    // Aplicar filtros de estado por si el elemento debe ocultarse
+                    this.applyStatusFilters();
                     
                     new Notice(`✅ Estado actualizado a: ${status.label}`);
                 } catch (error) {
