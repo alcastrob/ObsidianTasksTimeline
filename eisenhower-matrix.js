@@ -28,11 +28,18 @@ class EisenhowerMatrix {
         this.currentOverlay = null;
         this.overlayHovered = false;
         this.triggerHovered = false;
+        this.statesDropdownBtn = null;
         this.filters = {
             sortBy: this.config.sortBy,
             groupBy: this.config.groupBy,
             searchText: "",
-            todayOnly: false
+            todayOnly: false,
+            states: {
+                notStarted: true,    // ' '
+                inProgress: true,    // '/'
+                waiting: true,       // 'w'
+                delegated: true      // 'd'
+            }
         };
     }
 
@@ -152,7 +159,11 @@ class EisenhowerMatrix {
             if (!page.file?.tasks) continue;
 
             for (const task of page.file.tasks) {
+                // Filtrar tareas completadas
                 if (task.completed) continue;
+                
+                // Filtrar tareas canceladas usando task.status directamente
+                if (task.status === '-') continue;
 
                 const taskObj = {
                     text: task.text,
@@ -164,7 +175,7 @@ class EisenhowerMatrix {
                     priority: this.extractPriority(task.text),
                     tags: this.extractTags(task.text),
                     start: task.start || null,
-                    checkboxState: this.extractCheckboxState(task.text),
+                    checkboxState: task.status || ' ',
                     path: page.file.path,
                     section: task.section,
                     link: task.link
@@ -314,6 +325,67 @@ class EisenhowerMatrix {
             this.refreshMatrix();
         });
 
+        // Filtro de estados (dropdown con checkboxes)
+        const statesContainer = topBar.createDiv({ cls: "states-dropdown-container" });
+        statesContainer.createSpan({ text: "Estados: ", cls: "filter-label" });
+        
+        this.statesDropdownBtn = statesContainer.createEl("button", {
+            text: "Todos ▼",
+            cls: "states-dropdown-btn"
+        });
+        
+        const statesDropdownMenu = statesContainer.createDiv({ cls: "states-dropdown-menu" });
+        statesDropdownMenu.style.display = "none";
+        
+        // Crear checkboxes dentro del dropdown
+        const states = [
+            { key: "notStarted", label: "⚪ No comenzadas", icon: "⚪" },
+            { key: "inProgress", label: "🔄 En curso", icon: "🔄" },
+            { key: "waiting", label: "⏸️ En espera", icon: "⏸️" },
+            { key: "delegated", label: "👤 Delegadas", icon: "👤" }
+        ];
+        
+        states.forEach(state => {
+            const option = statesDropdownMenu.createDiv({ cls: "dropdown-option" });
+            
+            const checkbox = option.createEl("input", {
+                type: "checkbox",
+                cls: "dropdown-checkbox",
+                attr: { id: `state-${state.key}`, checked: true }
+            });
+            
+            const label = option.createEl("label", {
+                text: state.label,
+                cls: "dropdown-label",
+                attr: { for: `state-${state.key}` }
+            });
+            
+            checkbox.addEventListener("change", (e) => {
+                this.filters.states[state.key] = e.target.checked;
+                this.updateStatesButtonText(this.statesDropdownBtn);
+                this.refreshMatrix();
+            });
+        });
+        
+        // Toggle dropdown al hacer clic en el botón
+        this.statesDropdownBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isVisible = statesDropdownMenu.style.display !== "none";
+            statesDropdownMenu.style.display = isVisible ? "none" : "block";
+        });
+        
+        // Cerrar dropdown al hacer clic fuera
+        document.addEventListener("click", (e) => {
+            if (!statesContainer.contains(e.target)) {
+                statesDropdownMenu.style.display = "none";
+            }
+        });
+        
+        // Evitar que el dropdown se cierre al hacer clic dentro
+        statesDropdownMenu.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+
         // Ordenar por
         const sortContainer = topBar.createDiv({ cls: "filter-container" });
         sortContainer.createSpan({ text: "Ordenar: ", cls: "filter-label" });
@@ -377,6 +449,27 @@ class EisenhowerMatrix {
 
         // Configurar zoom
         this.setupZoom(zoomSlider, zoomValue, savedZoom);
+    }
+
+    /**
+     * Actualiza el texto del botón de estados según los filtros activos
+     */
+    updateStatesButtonText(button) {
+        const states = this.filters.states;
+        const activeCount = Object.values(states).filter(v => v).length;
+        
+        if (activeCount === 4) {
+            button.textContent = "Todos ▼";
+        } else if (activeCount === 0) {
+            button.textContent = "Ninguno ▼";
+        } else {
+            const icons = [];
+            if (states.notStarted) icons.push("⚪");
+            if (states.inProgress) icons.push("🔄");
+            if (states.waiting) icons.push("⏸️");
+            if (states.delegated) icons.push("👤");
+            button.textContent = `${icons.join(" ")} ▼`;
+        }
     }
 
     /**
@@ -504,6 +597,18 @@ class EisenhowerMatrix {
                 return taskDateStr === todayStr;
             });
         }
+        
+        // Filtro por estados
+        filtered = filtered.filter(task => {
+            const state = task.checkboxState || ' ';
+            
+            if (state === ' ' && !this.filters.states.notStarted) return false;
+            if (state === '/' && !this.filters.states.inProgress) return false;
+            if (state === 'w' && !this.filters.states.waiting) return false;
+            if (state === 'd' && !this.filters.states.delegated) return false;
+            
+            return true;
+        });
         
         return filtered;
     }
@@ -753,10 +858,10 @@ class EisenhowerMatrix {
             text: `📄 ${task.path.split('/').pop().replace('.md', '')}`,
             cls: "task-page-link"
         });
-        pageLink.addEventListener("click", (e) => {
+        pageLink.addEventListener("click", async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.openNote(task.path);
+            await this.openNote(task.path, task.line);
         });
 
         return taskEl;
@@ -770,29 +875,22 @@ class EisenhowerMatrix {
         const parts = [];
         let currentIndex = 0;
 
-        // Regex para task links (🆔 y ⛔), wikilinks y etiquetas
-        const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9]+)/g;
+        // Regex mejorados
+        const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9,]+)/g; // Soporta múltiples IDs separados por comas
         const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
         const tagRegex = /#[\w\-áéíóúñÑ]+/gi;
 
         const allMatches = [];
         
-        // Buscar task links
+        // Primero, encontrar todos los wikilinks para excluirlos al buscar tags
+        const wikiLinkPositions = [];
         let match;
-        while ((match = taskLinkRegex.exec(text)) !== null) {
-            allMatches.push({
-                type: 'taskLink',
-                index: match.index,
-                length: match[0].length,
-                content: match[0],
-                linkType: match[1],
-                linkId: match[2]
-            });
-        }
-        
-        // Buscar wikilinks
         wikiLinkRegex.lastIndex = 0;
         while ((match = wikiLinkRegex.exec(text)) !== null) {
+            wikiLinkPositions.push({
+                start: match.index,
+                end: match.index + match[0].length
+            });
             allMatches.push({
                 type: 'wikilink',
                 index: match.index,
@@ -801,18 +899,41 @@ class EisenhowerMatrix {
             });
         }
         
-        // Buscar etiquetas
+        // Buscar task links (pueden tener múltiples IDs)
+        taskLinkRegex.lastIndex = 0;
+        while ((match = taskLinkRegex.exec(text)) !== null) {
+            allMatches.push({
+                type: 'taskLink',
+                index: match.index,
+                length: match[0].length,
+                content: match[0],
+                linkType: match[1],
+                linkIds: match[2].split(',').map(id => id.trim()) // Split múltiples IDs
+            });
+        }
+        
+        // Buscar etiquetas, pero solo fuera de wikilinks
         tagRegex.lastIndex = 0;
         while ((match = tagRegex.exec(text)) !== null) {
-            // Filtrar #urgent y #noturgent
-            const tagLower = match[0].toLowerCase();
-            if (tagLower !== '#urgent' && tagLower !== '#noturgent') {
-                allMatches.push({
-                    type: 'tag',
-                    index: match.index,
-                    length: match[0].length,
-                    content: match[0]
-                });
+            const tagStart = match.index;
+            const tagEnd = match.index + match[0].length;
+            
+            // Verificar que el tag no esté dentro de un wikilink
+            const isInsideWikilink = wikiLinkPositions.some(pos => 
+                tagStart >= pos.start && tagEnd <= pos.end
+            );
+            
+            if (!isInsideWikilink) {
+                // Filtrar #urgent y #noturgent
+                const tagLower = match[0].toLowerCase();
+                if (tagLower !== '#urgent' && tagLower !== '#noturgent') {
+                    allMatches.push({
+                        type: 'tag',
+                        index: match.index,
+                        length: match[0].length,
+                        content: match[0]
+                    });
+                }
             }
         }
         
@@ -842,12 +963,14 @@ class EisenhowerMatrix {
         // Renderizar partes
         parts.forEach(part => {
             if (part.type === 'text') {
-                // Limpiar emojis de prioridad, fechas y estado del texto
+                // Limpiar emojis de prioridad, fechas, estado y etiquetas de urgencia del texto
                 let cleanText = part.content;
                 cleanText = cleanText
                     .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad con Unicode
                     .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '') // Quitar fechas
                     .replace(/[🔁♻️]/gu, '') // Quitar emojis de recurrencia
+                    .replace(/#urgent\b/gi, '') // Quitar #urgent
+                    .replace(/#noturgent\b/gi, '') // Quitar #noturgent
                     .trim();
                 if (cleanText) {
                     container.createSpan({ text: cleanText + ' ' });
@@ -858,12 +981,12 @@ class EisenhowerMatrix {
                     cls: 'task-link'
                 });
                 linkSpan.dataset.linkType = part.linkType;
-                linkSpan.dataset.linkId = part.linkId;
+                linkSpan.dataset.linkIds = part.linkIds.join(','); // Guardar todos los IDs
                 
-                // Eventos para mostrar overlay
+                // Eventos para mostrar overlay (ahora con múltiples IDs)
                 linkSpan.addEventListener('mouseenter', (e) => {
                     this.triggerHovered = true;
-                    this.showTaskOverlay(e, part.linkType, part.linkId);
+                    this.showTaskOverlay(e, part.linkType, part.linkIds);
                 });
                 linkSpan.addEventListener('mouseleave', () => {
                     this.triggerHovered = false;
@@ -878,9 +1001,9 @@ class EisenhowerMatrix {
                     text: part.content,
                     cls: 'wiki-link'
                 });
-                link.addEventListener('click', (e) => {
+                link.addEventListener('click', async (e) => {
                     e.preventDefault();
-                    this.openNote(part.content);
+                    await this.openNote(part.content);
                 });
             } else if (part.type === 'tag') {
                 const tagPill = container.createSpan({
@@ -1484,36 +1607,63 @@ class EisenhowerMatrix {
     }
 
     /**
-     * Abre una nota en Obsidian
+     * Abre una nota en Obsidian en nueva pestaña y hace scroll a la línea
      */
-    openNote(notePath) {
+    async openNote(notePath, lineNumber = null) {
+        let file;
+        
         // Si es una ruta completa
         if (notePath.includes('/') || notePath.includes('.md')) {
-            const file = this.dv.app.vault.getAbstractFileByPath(notePath);
-            if (file) {
-                this.dv.app.workspace.getLeaf(false).openFile(file);
-                return;
-            }
+            file = this.dv.app.vault.getAbstractFileByPath(notePath);
+        } else {
+            // Si es solo un nombre (para wikilinks)
+            file = this.dv.app.metadataCache.getFirstLinkpathDest(notePath, '');
         }
         
-        // Si es solo un nombre (para wikilinks)
-        const file = this.dv.app.metadataCache.getFirstLinkpathDest(notePath, '');
         if (file) {
-            this.dv.app.workspace.getLeaf(false).openFile(file);
+            // Abrir en nueva pestaña
+            const leaf = this.dv.app.workspace.getLeaf('tab');
+            await leaf.openFile(file);
+            
+            // Si se especifica una línea, hacer scroll a ella
+            if (lineNumber !== null) {
+                // Esperar un poco a que el archivo se cargue
+                setTimeout(() => {
+                    const view = leaf.view;
+                    if (view && view.editor) {
+                        // Posicionar el cursor en la línea
+                        view.editor.setCursor({ line: lineNumber, ch: 0 });
+                        // Centrar la vista en esa línea
+                        view.editor.scrollIntoView({ 
+                            from: { line: lineNumber, ch: 0 }, 
+                            to: { line: lineNumber, ch: 0 } 
+                        }, true);
+                    }
+                }, 100);
+            }
         }
     }
 
     /**
      * Muestra overlay con información de tarea enlazada
      */
-    async showTaskOverlay(event, linkType, taskId) {
+    async showTaskOverlay(event, linkType, taskIds) {
         // Limpiar overlay anterior si existe
         this.hideTaskOverlay();
         
-        // Buscar la(s) tarea(s) enlazada(s)
-        const linkedTasks = await this.findTasksById(taskId, linkType);
+        // taskIds puede ser un array de IDs
+        const ids = Array.isArray(taskIds) ? taskIds : [taskIds];
         
-        if (!linkedTasks || linkedTasks.length === 0) {
+        // Buscar tareas para cada ID
+        const allLinkedTasks = [];
+        for (const taskId of ids) {
+            const linkedTasks = await this.findTasksById(taskId, linkType);
+            if (linkedTasks && linkedTasks.length > 0) {
+                allLinkedTasks.push(...linkedTasks);
+            }
+        }
+        
+        if (allLinkedTasks.length === 0) {
             return;
         }
 
@@ -1524,15 +1674,17 @@ class EisenhowerMatrix {
 
         const header = overlay.createDiv('task-overlay-header');
         if (linkType === '⛔') {
-            header.textContent = '⛔ Tarea bloqueante';
+            header.textContent = allLinkedTasks.length > 1
+                ? `⛔ Tareas bloqueantes (${allLinkedTasks.length})`
+                : '⛔ Tarea bloqueante';
         } else {
-            header.textContent = linkedTasks.length > 1 
-                ? `🆔 Tareas dependientes (${linkedTasks.length})`
+            header.textContent = allLinkedTasks.length > 1 
+                ? `🆔 Tareas dependientes (${allLinkedTasks.length})`
                 : '🆔 Tarea dependiente';
         }
 
         // Mostrar cada tarea enlazada
-        linkedTasks.forEach((linkedTask, index) => {
+        allLinkedTasks.forEach((linkedTask, index) => {
             if (index > 0) {
                 const separator = overlay.createDiv();
                 separator.style.cssText = `
@@ -1615,41 +1767,54 @@ class EisenhowerMatrix {
             for (let index = 0; index < lines.length; index++) {
                 const line = lines[index];
                 
-                // Buscar tareas
-                const taskMatch = line.match(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u);
+                // Buscar tareas (no completadas ni canceladas)
+                const taskMatch = line.match(/^[\s]*[-*]\s+\[([x\- \/wd])\]/u);
                 if (taskMatch) {
+                    const checkboxState = taskMatch[1];
+                    
+                    // Filtrar completadas (x) y canceladas (-)
+                    if (checkboxState === 'x' || checkboxState === '-') {
+                        continue;
+                    }
+                    
                     // Buscar el patrón correcto según el tipo de enlace
-                    const regex = new RegExp(`${searchPattern}\\s*([a-zA-Z0-9]+)`);
+                    const regex = new RegExp(`${searchPattern}\\s*([a-zA-Z0-9,]+)`);
                     const idMatch = line.match(regex);
-                    if (idMatch && idMatch[1] === taskId) {
-                        // Extraer texto de la tarea
-                        let taskText = line
-                            .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
-                            .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
-                            .replace(/[🔺⏫🔼🔽⏬]/gu, '')
-                            .replace(/[🔁♻️]/gu, '')
-                            .replace(/#[\w-]+/gu, '')
-                            .replace(/\s+/g, ' ')
-                            .trim();
+                    if (idMatch) {
+                        // Extraer los IDs (puede ser uno o varios separados por comas)
+                        const ids = idMatch[1].split(',').map(id => id.trim());
                         
-                        // Buscar fecha de inicio
-                        const dateMatch = line.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
-                        
-                        const taskInfo = {
-                            text: taskText || 'Sin descripción',
-                            file: file,
-                            line: index,
-                            date: dateMatch ? dateMatch[1] : null,
-                            fullLine: line
-                        };
-                        
-                        // Si es ⛔ (before), solo devolver la primera tarea encontrada
-                        if (linkType === '⛔') {
-                            return [taskInfo];
+                        // Verificar si alguno de los IDs coincide
+                        if (ids.includes(taskId)) {
+                            // Extraer texto de la tarea
+                            let taskText = line
+                                .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
+                                .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
+                                .replace(/[🔺⏫🔼🔽⏬]/gu, '')
+                                .replace(/[🔁♻️]/gu, '')
+                                .replace(/#[\w-]+/gu, '')
+                                .replace(/\s+/g, ' ')
+                                .trim();
+                            
+                            // Buscar fecha de inicio
+                            const dateMatch = line.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
+                            
+                            const taskInfo = {
+                                text: taskText || 'Sin descripción',
+                                file: file,
+                                line: index,
+                                date: dateMatch ? dateMatch[1] : null,
+                                fullLine: line
+                            };
+                            
+                            // Si es ⛔ (before), solo devolver la primera tarea encontrada
+                            if (linkType === '⛔') {
+                                return [taskInfo];
+                            }
+                            
+                            // Si es 🆔 (after), agregar a la lista para devolver todas
+                            foundTasks.push(taskInfo);
                         }
-                        
-                        // Si es 🆔 (after), agregar a la lista para devolver todas
-                        foundTasks.push(taskInfo);
                     }
                 }
             }
@@ -1901,6 +2066,71 @@ class EisenhowerMatrix {
                 cursor: pointer;
                 user-select: none;
                 font-weight: 500;
+            }
+
+            .states-dropdown-container {
+                position: relative;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .states-dropdown-btn {
+                padding: 6px 12px;
+                border: 1px solid var(--background-modifier-border);
+                border-radius: 6px;
+                background: var(--background-primary);
+                color: var(--text-normal);
+                font-size: 13px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                transition: background 0.2s;
+            }
+
+            .states-dropdown-btn:hover {
+                background: var(--background-modifier-hover);
+            }
+
+            .states-dropdown-menu {
+                position: absolute;
+                top: calc(100% + 4px);
+                left: 0;
+                background: var(--background-primary);
+                border: 1px solid var(--background-modifier-border);
+                border-radius: 6px;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                z-index: 1000;
+                min-width: 200px;
+                padding: 8px;
+            }
+
+            .dropdown-option {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 8px;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+
+            .dropdown-option:hover {
+                background: var(--background-modifier-hover);
+            }
+
+            .dropdown-checkbox {
+                cursor: pointer;
+                margin: 0;
+            }
+
+            .dropdown-label {
+                cursor: pointer;
+                user-select: none;
+                font-size: 13px;
+                color: var(--text-normal);
+                flex: 1;
             }
 
             .refresh-btn {

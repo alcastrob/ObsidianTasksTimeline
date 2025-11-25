@@ -1110,10 +1110,38 @@ class TasksTimeline {
     }
 
     extractTags(text) {
-        // Extraer todas las etiquetas del formato #etiqueta
+        // Primero, encontrar todos los wikilinks para excluir # que están dentro
+        const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+        const wikiLinkRanges = [];
+        let match;
+        
+        while ((match = wikiLinkRegex.exec(text)) !== null) {
+            wikiLinkRanges.push({
+                start: match.index,
+                end: match.index + match[0].length
+            });
+        }
+        
+        // Ahora extraer etiquetas, pero solo las que NO están dentro de wikilinks
         const tagRegex = /#[\w\-áéíóúñü]+/gi;
-        const tags = text.match(tagRegex) || [];
-        return tags.map(tag => tag.toLowerCase());
+        const tags = [];
+        
+        while ((match = tagRegex.exec(text)) !== null) {
+            const tagStart = match.index;
+            const tagEnd = tagStart + match[0].length;
+            
+            // Verificar si esta etiqueta está dentro de algún wikilink
+            const isInsideWikiLink = wikiLinkRanges.some(range => 
+                tagStart >= range.start && tagEnd <= range.end
+            );
+            
+            // Solo agregar si NO está dentro de un wikilink
+            if (!isInsideWikiLink) {
+                tags.push(match[0].toLowerCase());
+            }
+        }
+        
+        return tags;
     }
 
     getColorForTag(tag) {
@@ -1961,8 +1989,9 @@ class TasksTimeline {
     processTaskLinks(textElement, taskText) {
         // Buscar emojis de tareas enlazadas: ⛔ (before) y 🆔 (after)
         // Wikilinks: [[nombre del enlace]]
-        // Y etiquetas: #etiqueta
-        const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9]+)/g;
+        // Y etiquetas: #etiqueta (pero NO dentro de wikilinks)
+        // NOTA: Los IDs pueden estar separados por comas: ⛔ id1,id2,id3
+        const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9,]+)/g;
         const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
         const tagRegex = /#[\w\-áéíóúñü]+/gi;
         
@@ -1972,21 +2001,16 @@ class TasksTimeline {
         // Encontrar todas las coincidencias y ordenarlas por posición
         const allMatches = [];
         
+        // Primero, identificar todos los wikilinks y sus rangos
+        const wikiLinkRanges = [];
         let match;
-        while ((match = taskLinkRegex.exec(taskText)) !== null) {
-            allMatches.push({
-                type: 'taskLink',
-                index: match.index,
-                length: match[0].length,
-                content: match[0],
-                linkType: match[1],
-                linkId: match[2]
-            });
-        }
         
-        // Reset lastIndex for wikiLinkRegex
-        wikiLinkRegex.lastIndex = 0;
         while ((match = wikiLinkRegex.exec(taskText)) !== null) {
+            wikiLinkRanges.push({
+                start: match.index,
+                end: match.index + match[0].length
+            });
+            
             allMatches.push({
                 type: 'wikiLink',
                 index: match.index,
@@ -1996,15 +2020,44 @@ class TasksTimeline {
             });
         }
         
-        // Reset lastIndex for tagRegex
-        tagRegex.lastIndex = 0;
-        while ((match = tagRegex.exec(taskText)) !== null) {
+        // Task links - SOPORTA MÚLTIPLES IDs SEPARADOS POR COMAS
+        taskLinkRegex.lastIndex = 0;
+        while ((match = taskLinkRegex.exec(taskText)) !== null) {
+            const linkType = match[1]; // ⛔ o 🆔
+            const idsString = match[2]; // Puede ser "id1" o "id1,id2,id3"
+            const ids = idsString.split(',').map(id => id.trim());
+            
+            // Crear un match para el conjunto completo de IDs
             allMatches.push({
-                type: 'tag',
+                type: 'taskLink',
                 index: match.index,
                 length: match[0].length,
-                tagText: match[0]
+                content: match[0],
+                linkType: linkType,
+                linkIds: ids // Array de IDs
             });
+        }
+        
+        // Tags - SOLO los que NO están dentro de wikilinks
+        tagRegex.lastIndex = 0;
+        while ((match = tagRegex.exec(taskText)) !== null) {
+            const tagStart = match.index;
+            const tagEnd = tagStart + match[0].length;
+            
+            // Verificar si este tag está dentro de algún wikilink
+            const isInsideWikiLink = wikiLinkRanges.some(range => 
+                tagStart >= range.start && tagEnd <= range.end
+            );
+            
+            // Solo agregar si NO está dentro de un wikilink
+            if (!isInsideWikiLink) {
+                allMatches.push({
+                    type: 'tag',
+                    index: match.index,
+                    length: match[0].length,
+                    tagText: match[0]
+                });
+            }
         }
         
         // Ordenar por posición
@@ -2041,12 +2094,12 @@ class TasksTimeline {
             } else if (part.type === 'taskLink') {
                 const linkSpan = textElement.createSpan({ text: part.content, cls: 'task-link' });
                 linkSpan.dataset.linkType = part.linkType;
-                linkSpan.dataset.linkId = part.linkId;
+                linkSpan.dataset.linkIds = JSON.stringify(part.linkIds); // Guardar array como JSON
                 
                 // Eventos para mostrar overlay
                 linkSpan.addEventListener('mouseenter', (e) => {
                     this.triggerHovered = true;
-                    this.showTaskOverlay(e, part.linkType, part.linkId);
+                    this.showTaskOverlay(e, part.linkType, part.linkIds);
                 });
                 linkSpan.addEventListener('mouseleave', () => {
                     this.triggerHovered = false;
@@ -2106,14 +2159,23 @@ class TasksTimeline {
         });
     }
 
-    async showTaskOverlay(event, linkType, taskId) {
+    async showTaskOverlay(event, linkType, taskIds) {
         // Limpiar overlay anterior si existe
         this.hideTaskOverlay();
         
-        // Buscar la(s) tarea(s) enlazada(s) pasando el linkType
-        const linkedTasks = await this.findTasksById(taskId, linkType);
+        // taskIds puede ser un string (retrocompatibilidad) o un array
+        const ids = Array.isArray(taskIds) ? taskIds : [taskIds];
         
-        if (!linkedTasks || linkedTasks.length === 0) {
+        // Buscar todas las tareas enlazadas para TODOS los IDs
+        const allLinkedTasks = [];
+        for (const taskId of ids) {
+            const tasksForId = await this.findTasksById(taskId, linkType);
+            if (tasksForId && tasksForId.length > 0) {
+                allLinkedTasks.push(...tasksForId);
+            }
+        }
+        
+        if (allLinkedTasks.length === 0) {
             return;
         }
 
@@ -2123,15 +2185,17 @@ class TasksTimeline {
 
         const header = overlay.createDiv('task-overlay-header');
         if (linkType === '⛔') {
-            header.textContent = '⛔ Tarea bloqueante';
+            header.textContent = allLinkedTasks.length > 1 
+                ? `⛔ Tareas bloqueantes (${allLinkedTasks.length})`
+                : '⛔ Tarea bloqueante';
         } else {
-            header.textContent = linkedTasks.length > 1 
-                ? `🆔 Tareas dependientes (${linkedTasks.length})`
+            header.textContent = allLinkedTasks.length > 1 
+                ? `🆔 Tareas dependientes (${allLinkedTasks.length})`
                 : '🆔 Tarea dependiente';
         }
 
         // Mostrar cada tarea enlazada
-        linkedTasks.forEach((linkedTask, index) => {
+        allLinkedTasks.forEach((linkedTask, index) => {
             if (index > 0) {
                 // Separador entre tareas
                 const separator = overlay.createDiv();
@@ -2207,9 +2271,9 @@ class TasksTimeline {
         
         // Determinar qué patrón buscar según el tipo de enlace
         // ⛔ (before) significa "esta tarea necesita que se complete X primero"
-        //    -> buscar LA tarea que tiene 🆔 X (la que bloquea) - UNA SOLA
+        //    -> buscar LA tarea que tiene 🆔 X (la que bloquea)
         // 🆔 (after) significa "esta tarea tiene el ID X"
-        //    -> buscar TODAS las tareas que tienen ⛔ X (las que dependen de esta) - MÚLTIPLES
+        //    -> buscar TODAS las tareas que tienen ⛔ X (las que dependen de esta)
         const searchPattern = linkType === '⛔' ? '🆔' : '⛔';
         const foundTasks = [];
         
@@ -2225,37 +2289,45 @@ class TasksTimeline {
                 const taskMatch = normalizedLine.match(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u);
                 if (taskMatch) {
                     // Buscar el patrón correcto según el tipo de enlace
-                    const regex = new RegExp(`${searchPattern}\\s*([a-zA-Z0-9]+)`);
+                    // NOTA: Ahora captura toda la cadena de IDs (con comas)
+                    const regex = new RegExp(`${searchPattern}\\s*([a-zA-Z0-9,]+)`);
                     const idMatch = normalizedLine.match(regex);
-                    if (idMatch && idMatch[1] === taskId) {
-                        // Extraer texto de la tarea
-                        let taskText = line
-                            .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
-                            .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
-                            .replace(/[🔺⏫🔼🔽⏬]/gu, '')
-                            .replace(/[🔁♻️]/gu, '')
-                            .replace(/#[\w-]+/gu, '')
-                            .replace(/\s+/g, ' ')
-                            .trim();
+                    
+                    if (idMatch) {
+                        // Dividir por comas y verificar si alguno coincide con taskId
+                        const ids = idMatch[1].split(',').map(id => id.trim());
                         
-                        // Buscar fecha de inicio
-                        const dateMatch = normalizedLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
-                        
-                        const taskInfo = {
-                            text: taskText || 'Sin descripción',
-                            file: file,
-                            line: index,
-                            date: dateMatch ? dateMatch[1] : null,
-                            fullLine: line
-                        };
-                        
-                        // Si es ⛔ (before), solo devolver la primera tarea encontrada
-                        if (linkType === '⛔') {
-                            return [taskInfo];
+                        if (ids.includes(taskId)) {
+                            // Extraer texto de la tarea
+                            let taskText = line
+                                .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
+                                .replace(/[⛔🆔]\s*[a-zA-Z0-9,]+/gu, '') // Eliminar enlaces de tareas
+                                .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
+                                .replace(/[🔺⏫🔼🔽⏬]/gu, '')
+                                .replace(/[🔁♻️]/gu, '')
+                                .replace(/#[\w-]+/gu, '')
+                                .replace(/\s+/g, ' ')
+                                .trim();
+                            
+                            // Buscar fecha de inicio
+                            const dateMatch = normalizedLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
+                            
+                            const taskInfo = {
+                                text: taskText || 'Sin descripción',
+                                file: file,
+                                line: index,
+                                date: dateMatch ? dateMatch[1] : null,
+                                fullLine: line
+                            };
+                            
+                            // Si es ⛔ (before), solo devolver la primera tarea encontrada
+                            if (linkType === '⛔') {
+                                return [taskInfo];
+                            }
+                            
+                            // Si es 🆔 (after), agregar a la lista para devolver todas
+                            foundTasks.push(taskInfo);
                         }
-                        
-                        // Si es 🆔 (after), agregar a la lista para devolver todas
-                        foundTasks.push(taskInfo);
                     }
                 }
             }
