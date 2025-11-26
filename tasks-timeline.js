@@ -221,10 +221,17 @@ if (!document.getElementById(cssId)) {
     line-height: 1.5;
     word-wrap: break-word;
     word-break: break-word;
-    /* Padding derecho para evitar solapamiento con botones flotantes */
-    /* Los botones ocupan ~90px de ancho */
-    padding-right: 95px;
+    /* No padding-right fijo - usaremos un pseudo-elemento flotante */
     min-height: 40px; /* Mínimo 2 líneas para acomodar los botones */
+}
+
+/* Pseudo-elemento invisible que reserva espacio solo en las primeras líneas */
+.task-text::before {
+    content: '';
+    float: right;
+    width: 50px; /* Espacio reducido entre texto y botones */
+    height: 40px; /* ~2 líneas (13px * 1.5 * 2 = 39px) */
+    margin-left: 8px;
 }
 
 .task-text.completed {
@@ -1089,22 +1096,27 @@ class TasksTimeline {
             const state = checkboxMatch[1];
             // Grupo 0: Normal (espacio) y En curso (/)
             if (state === ' ' || state === '/') return 0;
-            // Grupo 1: En espera (w) y Delegada (d)
-            if (state === 'w' || state === 'd') return 1;
+            // Grupo 1: En espera (w)
+            if (state === 'w') return 1;
+            // Grupo 2: Delegada (d)
+            if (state === 'd') return 2;
             // Otros estados (completada, cancelada, etc.)
-            return 2;
+            return 3;
         };
         
-        const groupA = getStatusGroup(lineA);
-        const groupB = getStatusGroup(lineB);
+        const priorityA = getPriorityValue(lineA);
+        const priorityB = getPriorityValue(lineB);
         
-        // Si están en grupos diferentes, ordenar por grupo
-        if (groupA !== groupB) {
-            return groupA - groupB;
+        // Primero ordenar por prioridad
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB;
         }
         
-        // Si están en el mismo grupo, ordenar por prioridad
-        return getPriorityValue(lineA) - getPriorityValue(lineB);
+        // Si tienen la misma prioridad, ordenar por estado
+        // Normal/En curso primero, luego Waiting, luego Delegated
+        const groupA = getStatusGroup(lineA);
+        const groupB = getStatusGroup(lineB);
+        return groupA - groupB;
     }
 
     // Función helper para normalizar líneas eliminando selectores de variación problemáticos
@@ -1140,10 +1152,14 @@ class TasksTimeline {
                 tagStart >= range.start && tagEnd <= range.end
             );
             
+            // Verificar si es una etiqueta que debe ocultarse
+            const tagText = match[0].toLowerCase();
+            const isHiddenTag = tagText === '#urgent' || tagText === '#noturgent';
+            
             // Agregar todas las etiquetas que NO están dentro de wikilinks
-            // (sin importar si son inline o trailing)
-            if (!isInsideWikiLink) {
-                tags.push(match[0].toLowerCase());
+            // Y que NO son etiquetas ocultas (#urgent, #noturgent)
+            if (!isInsideWikiLink && !isHiddenTag) {
+                tags.push(tagText);
             }
         }
         
@@ -2033,11 +2049,14 @@ class TasksTimeline {
             });
         }
         
-        // Encontrar la posición del último emoji de metadatos
-        let lastMetadataPos = -1;
-        metadataRegex.lastIndex = 0;
-        while ((match = metadataRegex.exec(taskText)) !== null) {
-            lastMetadataPos = Math.max(lastMetadataPos, match.index);
+        // Encontrar la posición del último emoji de enlaces de tareas (⛔ o 🆔)
+        // Las etiquetas DESPUÉS de estos enlaces son "trailing" (píldoras)
+        // Las etiquetas ANTES son "inline" (texto normal)
+        const taskLinkEmojiRegex = /[⛔🆔]/g;
+        let lastTaskLinkPos = -1;
+        let taskLinkMatch;
+        while ((taskLinkMatch = taskLinkEmojiRegex.exec(taskText)) !== null) {
+            lastTaskLinkPos = Math.max(lastTaskLinkPos, taskLinkMatch.index);
         }
         
         // Task links - SOPORTA MÚLTIPLES IDs SEPARADOS POR COMAS
@@ -2060,28 +2079,42 @@ class TasksTimeline {
         
         // Tags - SOLO los que NO están dentro de wikilinks
         // Distinguir entre inline (texto normal) y trailing (píldoras)
+        // IMPORTANTE: #urgent y #noturgent NUNCA se muestran (ni texto ni píldora)
         tagRegex.lastIndex = 0;
         while ((match = tagRegex.exec(taskText)) !== null) {
             const tagStart = match.index;
             const tagEnd = tagStart + match[0].length;
+            const tagText = match[0].toLowerCase();
             
             // Verificar si este tag está dentro de algún wikilink
             const isInsideWikiLink = wikiLinkRanges.some(range => 
                 tagStart >= range.start && tagEnd <= range.end
             );
             
-            // Solo procesar si NO está dentro de un wikilink
+            // Verificar si es una etiqueta que debe ocultarse
+            const isHiddenTag = tagText === '#urgent' || tagText === '#noturgent';
+            
             if (!isInsideWikiLink) {
-                // Determinar si es una etiqueta "trailing" (al final, después de metadatos)
-                // o "inline" (en medio del texto)
-                const isTrailing = tagStart > lastMetadataPos;
-                
-                allMatches.push({
-                    type: isTrailing ? 'tag' : 'inlineTag',
-                    index: match.index,
-                    length: match[0].length,
-                    tagText: match[0]
-                });
+                if (isHiddenTag) {
+                    // Agregar como tipo especial que se saltará en el renderizado
+                    allMatches.push({
+                        type: 'hiddenTag',
+                        index: match.index,
+                        length: match[0].length,
+                        tagText: match[0]
+                    });
+                } else {
+                    // Determinar si es "trailing" o "inline"
+                    // Trailing = después del último emoji de enlace de tarea
+                    const isTrailing = lastTaskLinkPos !== -1 && tagStart > lastTaskLinkPos;
+                    
+                    allMatches.push({
+                        type: isTrailing ? 'tag' : 'inlineTag',
+                        index: match.index,
+                        length: match[0].length,
+                        tagText: match[0]
+                    });
+                }
             }
         }
         
@@ -2154,6 +2187,9 @@ class TasksTimeline {
                         new Notice(`❌ No se encontró el archivo: ${part.linkText}`);
                     }
                 });
+            } else if (part.type === 'hiddenTag') {
+                // Etiquetas ocultas (#urgent, #noturgent) - NO mostrar nada
+                // Simplemente saltar este match
             } else if (part.type === 'inlineTag') {
                 // Etiqueta INLINE (en medio del texto) - mostrar como texto normal
                 textElement.appendText(part.tagText);
