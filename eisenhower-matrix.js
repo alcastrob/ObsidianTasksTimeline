@@ -521,6 +521,10 @@ class EisenhowerMatrix {
         visibleTasks.forEach(task => {
             task.tags.forEach(tag => {
                 const tagLower = tag.toLowerCase();
+                // Filtrar #urgent y #noturgent
+                if (tagLower === '#urgent' || tagLower === '#noturgent') {
+                    return;
+                }
                 if (!tagCounts[tagLower]) {
                     tagCounts[tagLower] = { tag: tag, count: 0 };
                 }
@@ -809,6 +813,9 @@ class EisenhowerMatrix {
 
         // Selector de estado
         this.createStatusSelector(actionsContainer, task, taskEl);
+
+        // Selector de cuadrante
+        this.createQuadrantSelector(actionsContainer, task, taskEl);
 
         // Contenido de la tarea
         const taskContent = taskEl.createDiv({ cls: "task-content-wrapper" });
@@ -1234,6 +1241,10 @@ class EisenhowerMatrix {
         visibleTasks.forEach(task => {
             task.tags.forEach(tag => {
                 const tagLower = tag.toLowerCase();
+                // Filtrar #urgent y #noturgent
+                if (tagLower === '#urgent' || tagLower === '#noturgent') {
+                    return;
+                }
                 if (!tagCounts[tagLower]) {
                     tagCounts[tagLower] = { tag: tag, count: 0 };
                 }
@@ -1278,6 +1289,99 @@ class EisenhowerMatrix {
             const color = this.getTagColor(tag);
             tagPill.style.backgroundColor = color;
             tagPill.style.color = this.getContrastColor(color);
+        });
+    }
+
+    /**
+     * Crea el selector de cuadrante
+     */
+    createQuadrantSelector(container, task, taskEl) {
+        const currentQuadrant = this.classifyTask(task);
+        
+        // Iconos para cada cuadrante
+        const quadrantIcons = {
+            q1: "🔴",
+            q2: "🟢",
+            q3: "🟡",
+            q4: "⚪",
+            unclassified: "📋"
+        };
+        
+        const btn = container.createEl("button", {
+            text: quadrantIcons[currentQuadrant] || "📋",
+            cls: "task-quadrant-btn"
+        });
+        btn.title = "Mover a cuadrante";
+
+        let dropdownOpen = false;
+
+        btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+
+            if (dropdownOpen) {
+                const existingDropdown = document.querySelector(".quadrant-dropdown-fixed");
+                if (existingDropdown) existingDropdown.remove();
+                dropdownOpen = false;
+                return;
+            }
+
+            // Crear dropdown con posición fixed para evitar recortes
+            const dropdown = document.body.createDiv({ cls: "quadrant-dropdown-fixed" });
+            
+            // Calcular posición
+            const rect = btn.getBoundingClientRect();
+            dropdown.style.top = (rect.bottom + 4) + "px";
+            dropdown.style.left = (rect.left) + "px";
+
+            const quadrants = [
+                { id: "q1", icon: "🔴", label: "Urgente e Importante" },
+                { id: "q2", icon: "🟢", label: "No urgente e Importante" },
+                { id: "q3", icon: "🟡", label: "Urgente y No importante" },
+                { id: "q4", icon: "⚪", label: "No urgente y No importante" }
+            ];
+
+            quadrants.forEach(q => {
+                const option = dropdown.createDiv({ cls: "quadrant-option" });
+                option.createSpan({ text: q.icon });
+                option.createSpan({ text: ` ${q.label}` });
+
+                if (q.id === currentQuadrant) {
+                    option.classList.add("selected");
+                }
+
+                option.addEventListener("click", async (e) => {
+                    e.stopPropagation();
+                    
+                    // Mover tarea al cuadrante seleccionado
+                    await this.moveTaskToQuadrant(task, q.id);
+                    btn.setText(q.icon);
+                    dropdown.remove();
+                    dropdownOpen = false;
+
+                    // Animar movimiento de la tarjeta
+                    taskEl.style.transition = "all 0.3s ease-out";
+                    taskEl.style.opacity = "0";
+                    taskEl.style.transform = "scale(0.95)";
+                    
+                    setTimeout(() => {
+                        taskEl.remove();
+                        this.updateQuadrantCounters();
+                        this.updateTagsBar();
+                        // Recrear matriz para mostrar la tarea en su nuevo cuadrante
+                        this.refreshMatrix();
+                    }, 300);
+                });
+            });
+
+            dropdownOpen = true;
+
+            setTimeout(() => {
+                document.addEventListener("click", function closeDropdown() {
+                    dropdown.remove();
+                    dropdownOpen = false;
+                    document.removeEventListener("click", closeDropdown);
+                });
+            }, 10);
         });
     }
 
@@ -2378,14 +2482,32 @@ class EisenhowerMatrix {
             }
 
             .task-priority-btn:hover,
-            .task-status-btn:hover {
+            .task-status-btn:hover,
+            .task-quadrant-btn:hover {
                 background: var(--interactive-accent);
                 color: var(--text-on-accent);
                 border-color: var(--interactive-accent);
             }
 
+            .task-quadrant-btn {
+                width: 24px;
+                height: 24px;
+                border: 1px solid var(--background-modifier-border);
+                background: var(--background-secondary);
+                color: var(--text-muted);
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+                padding: 0;
+            }
+
             .priority-dropdown,
-            .status-dropdown {
+            .status-dropdown,
+            .quadrant-dropdown {
                 position: absolute;
                 top: 100%;
                 right: 0;
@@ -2394,13 +2516,25 @@ class EisenhowerMatrix {
                 border: 1px solid var(--background-modifier-border);
                 border-radius: 8px;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                z-index: 100;
-                min-width: 150px;
+                z-index: 10000;
+                min-width: 200px;
+                overflow: hidden;
+            }
+
+            .quadrant-dropdown-fixed {
+                position: fixed;
+                background: var(--background-primary);
+                border: 1px solid var(--background-modifier-border);
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                z-index: 10000;
+                min-width: 240px;
                 overflow: hidden;
             }
 
             .priority-option,
-            .status-option {
+            .status-option,
+            .quadrant-option {
                 padding: 8px 12px;
                 cursor: pointer;
                 font-size: 13px;
@@ -2411,12 +2545,14 @@ class EisenhowerMatrix {
             }
 
             .priority-option:hover,
-            .status-option:hover {
+            .status-option:hover,
+            .quadrant-option:hover {
                 background: var(--background-modifier-hover);
             }
 
             .priority-option.selected,
-            .status-option.selected {
+            .status-option.selected,
+            .quadrant-option.selected {
                 background: var(--interactive-accent);
                 color: var(--text-on-accent);
             }
@@ -2426,7 +2562,7 @@ class EisenhowerMatrix {
                 gap: 10px;
                 align-items: flex-start;
                 margin-top: 4px;
-                padding-right: 80px;
+                padding-right: 110px;
             }
 
             .task-checkbox {
