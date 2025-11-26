@@ -221,6 +221,10 @@ if (!document.getElementById(cssId)) {
     line-height: 1.5;
     word-wrap: break-word;
     word-break: break-word;
+    /* Padding derecho para evitar solapamiento con botones flotantes */
+    /* Los botones ocupan ~90px de ancho */
+    padding-right: 95px;
+    min-height: 40px; /* Mínimo 2 líneas para acomodar los botones */
 }
 
 .task-text.completed {
@@ -1122,7 +1126,8 @@ class TasksTimeline {
             });
         }
         
-        // Ahora extraer etiquetas, pero solo las que NO están dentro de wikilinks
+        // Extraer TODAS las etiquetas para la barra superior y filtrado
+        // (tanto inline como trailing - todas son útiles para búsqueda)
         const tagRegex = /#[\w\-áéíóúñü]+/gi;
         const tags = [];
         
@@ -1135,7 +1140,8 @@ class TasksTimeline {
                 tagStart >= range.start && tagEnd <= range.end
             );
             
-            // Solo agregar si NO está dentro de un wikilink
+            // Agregar todas las etiquetas que NO están dentro de wikilinks
+            // (sin importar si son inline o trailing)
             if (!isInsideWikiLink) {
                 tags.push(match[0].toLowerCase());
             }
@@ -1611,8 +1617,11 @@ class TasksTimeline {
             const color = this.getColorForTag(tag);
             tagButton.style.background = color;
             tagButton.style.color = '#ffffff';
+            tagButton.style.textShadow = '0 1px 2px rgba(0, 0, 0, 0.3)'; // Mejor legibilidad
             
-            const tagText = tagButton.createSpan({ text: tag });
+            // Mostrar texto sin el #
+            const tagTextWithoutHash = tag.startsWith('#') ? tag.substring(1) : tag;
+            const tagText = tagButton.createSpan({ text: tagTextWithoutHash });
             const countSpan = tagButton.createSpan({ 
                 text: `(${tagCounts[tag]})`, 
                 cls: 'tags-bar-count' 
@@ -1990,10 +1999,14 @@ class TasksTimeline {
         // Buscar emojis de tareas enlazadas: ⛔ (before) y 🆔 (after)
         // Wikilinks: [[nombre del enlace]]
         // Y etiquetas: #etiqueta (pero NO dentro de wikilinks)
-        // NOTA: Los IDs pueden estar separados por comas: ⛔ id1,id2,id3
+        // IMPORTANTE: Solo las etiquetas AL FINAL (después de emojis/fechas) se convierten en píldoras
+        // Las etiquetas en medio del texto se mantienen como texto normal
         const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9,]+)/g;
         const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
         const tagRegex = /#[\w\-áéíóúñü]+/gi;
+        
+        // Regex para encontrar emojis de metadatos (prioridad, fechas, recurrencia)
+        const metadataRegex = /[🔺⏫🔼🔽⏬📅🗓️⏳🛫🛬✅🔁♻️⛔🆔]/g;
         
         const parts = [];
         let lastIndex = 0;
@@ -2020,6 +2033,13 @@ class TasksTimeline {
             });
         }
         
+        // Encontrar la posición del último emoji de metadatos
+        let lastMetadataPos = -1;
+        metadataRegex.lastIndex = 0;
+        while ((match = metadataRegex.exec(taskText)) !== null) {
+            lastMetadataPos = Math.max(lastMetadataPos, match.index);
+        }
+        
         // Task links - SOPORTA MÚLTIPLES IDs SEPARADOS POR COMAS
         taskLinkRegex.lastIndex = 0;
         while ((match = taskLinkRegex.exec(taskText)) !== null) {
@@ -2039,6 +2059,7 @@ class TasksTimeline {
         }
         
         // Tags - SOLO los que NO están dentro de wikilinks
+        // Distinguir entre inline (texto normal) y trailing (píldoras)
         tagRegex.lastIndex = 0;
         while ((match = tagRegex.exec(taskText)) !== null) {
             const tagStart = match.index;
@@ -2049,10 +2070,14 @@ class TasksTimeline {
                 tagStart >= range.start && tagEnd <= range.end
             );
             
-            // Solo agregar si NO está dentro de un wikilink
+            // Solo procesar si NO está dentro de un wikilink
             if (!isInsideWikiLink) {
+                // Determinar si es una etiqueta "trailing" (al final, después de metadatos)
+                // o "inline" (en medio del texto)
+                const isTrailing = tagStart > lastMetadataPos;
+                
                 allMatches.push({
-                    type: 'tag',
+                    type: isTrailing ? 'tag' : 'inlineTag',
                     index: match.index,
                     length: match[0].length,
                     tagText: match[0]
@@ -2129,11 +2154,18 @@ class TasksTimeline {
                         new Notice(`❌ No se encontró el archivo: ${part.linkText}`);
                     }
                 });
+            } else if (part.type === 'inlineTag') {
+                // Etiqueta INLINE (en medio del texto) - mostrar como texto normal
+                textElement.appendText(part.tagText);
             } else if (part.type === 'tag') {
-                const tagSpan = textElement.createSpan({ text: part.tagText, cls: 'task-tag' });
+                // Etiqueta TRAILING (al final) - mostrar como píldora
+                // Extraer texto sin el # para mostrar en la píldora
+                const tagTextWithoutHash = part.tagText.substring(1); // Eliminar el #
+                const tagSpan = textElement.createSpan({ text: tagTextWithoutHash, cls: 'task-tag' });
                 const color = this.getColorForTag(part.tagText.toLowerCase());
                 tagSpan.style.background = color;
                 tagSpan.style.color = '#ffffff';
+                tagSpan.style.textShadow = '0 1px 2px rgba(0, 0, 0, 0.3)'; // Mejor legibilidad
                 
                 // Click en tag para filtrar
                 tagSpan.addEventListener('click', (e) => {
@@ -3100,7 +3132,7 @@ class TasksTimeline {
                             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
                             .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad
                             .replace(/[🔁♻️]/gu, '')
-                            .replace(/#[\w-]+/gu, '')
+                            // NO eliminar etiquetas aquí - se procesarán en processTaskLinks
                             .replace(/\s+/g, ' ')
                             .trim();
 
@@ -3167,7 +3199,7 @@ class TasksTimeline {
                             .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
                             .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad
                             .replace(/[🔁♻️]/gu, '')
-                            .replace(/#[\w-]+/gu, '')
+                            // NO eliminar etiquetas aquí - se procesarán en processTaskLinks
                             .replace(/\s+/g, ' ')
                             .trim();
 
@@ -3231,7 +3263,7 @@ class TasksTimeline {
                             .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
                             .replace(/[🔺⏫🔼🔽⏬]/gu, '') // Quitar emojis de prioridad
                             .replace(/[🔁♻️]/gu, '')
-                            .replace(/#[\w-]+/gu, '')
+                            // NO eliminar etiquetas aquí - se procesarán en processTaskLinks
                             .replace(/\s+/g, ' ')
                             .trim();
 
