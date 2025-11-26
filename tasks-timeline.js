@@ -229,7 +229,7 @@ if (!document.getElementById(cssId)) {
 .task-text::before {
     content: '';
     float: right;
-    width: 30px; /* Espacio mínimo entre texto y botones */
+    width: 1px; /* Espacio mínimo entre texto y botones */
     height: 35px; /* Exactamente 2 líneas: (13px * 1.5 * 2 = 39px, usamos 35px para evitar overflow a 3ra línea) */
     margin-left: 8px;
 }
