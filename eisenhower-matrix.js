@@ -1328,10 +1328,10 @@ class EisenhowerMatrix {
             // Crear dropdown con posición fixed para evitar recortes
             const dropdown = document.body.createDiv({ cls: "quadrant-dropdown-fixed" });
             
-            // Calcular posición
+            // Calcular posición alineada a la derecha del botón
             const rect = btn.getBoundingClientRect();
             dropdown.style.top = (rect.bottom + 4) + "px";
-            dropdown.style.left = (rect.left) + "px";
+            dropdown.style.right = (window.innerWidth - rect.right) + "px";
 
             const quadrants = [
                 { id: "q1", icon: "🔴", label: "Urgente e Importante" },
@@ -1565,10 +1565,10 @@ class EisenhowerMatrix {
 
             let taskLine = lines[task.line];
 
-            // Remover etiquetas
+            // Remover etiquetas (con flag Unicode)
             tagsToRemove.forEach(tag => {
-                const tagRegex = new RegExp(tag + '\\b', 'gi');
-                taskLine = taskLine.replace(tagRegex, '').trim();
+                const tagRegex = new RegExp(tag + '\\b', 'giu');
+                taskLine = taskLine.replace(tagRegex, '');
             });
 
             // Añadir etiquetas si no existen
@@ -1578,8 +1578,8 @@ class EisenhowerMatrix {
                 }
             });
 
-            // Limpiar espacios múltiples
-            taskLine = taskLine.replace(/\s+/g, ' ').trim();
+            // Limpiar espacios múltiples (con flag Unicode)
+            taskLine = taskLine.replace(/\s+/gu, ' ').trim();
 
             lines[task.line] = taskLine;
             await this.dv.app.vault.modify(file, lines.join('\n'));
@@ -1606,8 +1606,8 @@ class EisenhowerMatrix {
 
             let taskLine = lines[task.line];
 
-            // Remover emoji de prioridad anterior
-            taskLine = taskLine.replace(/[🔺⏫🔼🔽⏬]/g, '');
+            // Remover emoji de prioridad anterior (con flag Unicode)
+            taskLine = taskLine.replace(/[🔺⏫🔼🔽⏬]/gu, '');
 
             // Añadir nuevo emoji de prioridad
             const newEmoji = this.getPriorityEmoji(newPriority);
@@ -1615,7 +1615,7 @@ class EisenhowerMatrix {
                 taskLine += ' ' + newEmoji;
             }
 
-            taskLine = taskLine.replace(/\s+/g, ' ').trim();
+            taskLine = taskLine.replace(/\s+/gu, ' ').trim();
 
             lines[task.line] = taskLine;
             await this.dv.app.vault.modify(file, lines.join('\n'));
