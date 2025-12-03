@@ -29,6 +29,7 @@ class EisenhowerMatrix {
         this.overlayHovered = false;
         this.triggerHovered = false;
         this.statesDropdownBtn = null;
+        this.activeDropdown = null; // Para cerrar dropdowns previos
         this.filters = {
             sortBy: this.config.sortBy,
             groupBy: this.config.groupBy,
@@ -643,16 +644,29 @@ class EisenhowerMatrix {
             tasksByQuadrant[quadrant] = this.sortTasks(tasksByQuadrant[quadrant]);
         });
 
+        // Verificar si hay tareas sin clasificar
+        const hasUnclassifiedTasks = tasksByQuadrant.unclassified && tasksByQuadrant.unclassified.length > 0;
+        
+        // Ajustar CSS del grid según si hay tareas sin clasificar
+        if (hasUnclassifiedTasks) {
+            matrixContainer.style.gridTemplateColumns = "1fr 1fr 1fr";
+        } else {
+            matrixContainer.style.gridTemplateColumns = "1fr 1fr";
+        }
+
         // Crear cuadrantes en orden específico para el layout
-        // Fila 1: Q1, Q2, Unclassified (inicio)
+        // Fila 1: Q1, Q2, Unclassified (inicio, solo si hay tareas)
         this.createQuadrant(matrixContainer, "q1", "🔴 Urgente e Importante", 
                           "Hacer inmediatamente", tasksByQuadrant.q1);
         
         this.createQuadrant(matrixContainer, "q2", "🟢 No urgente e Importante", 
                           "Planificar y programar", tasksByQuadrant.q2);
         
-        this.createQuadrant(matrixContainer, "unclassified", "📋 Sin clasificar", 
-                          "Arrastra para clasificar", tasksByQuadrant.unclassified);
+        // Solo crear cuadrante Sin clasificar si hay tareas
+        if (hasUnclassifiedTasks) {
+            this.createQuadrant(matrixContainer, "unclassified", "📋 Sin clasificar", 
+                              "Arrastra para clasificar", tasksByQuadrant.unclassified);
+        }
         
         // Fila 2: Q3, Q4 (Sin clasificar continúa)
         this.createQuadrant(matrixContainer, "q3", "🟡 Urgente y No importante", 
@@ -1039,14 +1053,27 @@ class EisenhowerMatrix {
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
 
+            // Cerrar cualquier dropdown activo
+            if (this.activeDropdown) {
+                this.activeDropdown.remove();
+                this.activeDropdown = null;
+            }
+
             if (dropdownOpen) {
-                const existingDropdown = container.querySelector(".priority-dropdown");
+                const existingDropdown = document.querySelector(".priority-dropdown-fixed");
                 if (existingDropdown) existingDropdown.remove();
                 dropdownOpen = false;
                 return;
             }
 
-            const dropdown = container.createDiv({ cls: "priority-dropdown" });
+            // Crear dropdown con position: fixed
+            const dropdown = document.body.createDiv({ cls: "priority-dropdown-fixed" });
+            this.activeDropdown = dropdown; // Guardar referencia
+            
+            // Calcular posición alineada a la derecha del botón
+            const rect = btn.getBoundingClientRect();
+            dropdown.style.top = (rect.bottom + 4) + "px";
+            dropdown.style.right = (window.innerWidth - rect.right) + "px";
             
             const priorities = [
                 { value: "highest", emoji: "🔺", label: "Highest" },
@@ -1083,6 +1110,7 @@ class EisenhowerMatrix {
                     this.updateTaskCardMetadata(taskEl, task);
                     
                     dropdown.remove();
+                    this.activeDropdown = null; // Limpiar referencia
                     dropdownOpen = false;
                     
                     // Calcular nuevo cuadrante
@@ -1120,11 +1148,14 @@ class EisenhowerMatrix {
 
             // Cerrar al hacer clic fuera
             setTimeout(() => {
-                document.addEventListener("click", function closeDropdown() {
+                document.addEventListener("click", function closeDropdown(event) {
                     dropdown.remove();
+                    if (this.activeDropdown === dropdown) {
+                        this.activeDropdown = null;
+                    }
                     dropdownOpen = false;
                     document.removeEventListener("click", closeDropdown);
-                });
+                }.bind(this));
             }, 100);
         });
     }
@@ -1144,14 +1175,27 @@ class EisenhowerMatrix {
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
 
+            // Cerrar cualquier dropdown activo
+            if (this.activeDropdown) {
+                this.activeDropdown.remove();
+                this.activeDropdown = null;
+            }
+
             if (dropdownOpen) {
-                const existingDropdown = container.querySelector(".status-dropdown");
+                const existingDropdown = document.querySelector(".status-dropdown-fixed");
                 if (existingDropdown) existingDropdown.remove();
                 dropdownOpen = false;
                 return;
             }
 
-            const dropdown = container.createDiv({ cls: "status-dropdown" });
+            // Crear dropdown con position: fixed
+            const dropdown = document.body.createDiv({ cls: "status-dropdown-fixed" });
+            this.activeDropdown = dropdown; // Guardar referencia
+            
+            // Calcular posición alineada a la derecha del botón
+            const rect = btn.getBoundingClientRect();
+            dropdown.style.top = (rect.bottom + 4) + "px";
+            dropdown.style.right = (window.innerWidth - rect.right) + "px";
 
             const states = [
                 { value: " ", icon: "⚪", label: "No comenzada" },
@@ -1174,6 +1218,7 @@ class EisenhowerMatrix {
                     await this.updateTaskStatus(task, s.value);
                     btn.setText(s.icon);
                     dropdown.remove();
+                    this.activeDropdown = null; // Limpiar referencia
                     dropdownOpen = false;
 
                     // Actualizar icono en la tarjeta
@@ -1197,12 +1242,15 @@ class EisenhowerMatrix {
             dropdownOpen = true;
 
             setTimeout(() => {
-                document.addEventListener("click", function closeDropdown() {
+                document.addEventListener("click", function closeDropdown(event) {
                     dropdown.remove();
+                    if (this.activeDropdown === dropdown) {
+                        this.activeDropdown = null;
+                    }
                     dropdownOpen = false;
                     document.removeEventListener("click", closeDropdown);
-                });
-            }, 100);
+                }.bind(this));
+            }, 10);
         });
     }
 
@@ -1318,6 +1366,12 @@ class EisenhowerMatrix {
         btn.addEventListener("click", (e) => {
             e.stopPropagation();
 
+            // Cerrar cualquier dropdown activo
+            if (this.activeDropdown) {
+                this.activeDropdown.remove();
+                this.activeDropdown = null;
+            }
+
             if (dropdownOpen) {
                 const existingDropdown = document.querySelector(".quadrant-dropdown-fixed");
                 if (existingDropdown) existingDropdown.remove();
@@ -1327,6 +1381,7 @@ class EisenhowerMatrix {
 
             // Crear dropdown con posición fixed para evitar recortes
             const dropdown = document.body.createDiv({ cls: "quadrant-dropdown-fixed" });
+            this.activeDropdown = dropdown; // Guardar referencia
             
             // Calcular posición alineada a la derecha del botón
             const rect = btn.getBoundingClientRect();
@@ -1356,6 +1411,7 @@ class EisenhowerMatrix {
                     await this.moveTaskToQuadrant(task, q.id);
                     btn.setText(q.icon);
                     dropdown.remove();
+                    this.activeDropdown = null; // Limpiar referencia
                     dropdownOpen = false;
 
                     // Animar movimiento de la tarjeta
@@ -1376,11 +1432,14 @@ class EisenhowerMatrix {
             dropdownOpen = true;
 
             setTimeout(() => {
-                document.addEventListener("click", function closeDropdown() {
+                document.addEventListener("click", function closeDropdown(event) {
                     dropdown.remove();
+                    if (this.activeDropdown === dropdown) {
+                        this.activeDropdown = null;
+                    }
                     dropdownOpen = false;
                     document.removeEventListener("click", closeDropdown);
-                });
+                }.bind(this));
             }, 10);
         });
     }
@@ -1516,22 +1575,34 @@ class EisenhowerMatrix {
 
         switch (quadrantId) {
             case 'q1': // Urgente e Importante
-                newPriority = 'highest';
+                // Si tiene high o highest, mantenerla. Si no, poner high
+                if (task.priority !== 'high' && task.priority !== 'highest') {
+                    newPriority = 'high';
+                }
                 tagsToAdd = ['#urgent'];
                 tagsToRemove = ['#noturgent'];
                 break;
             case 'q2': // No urgente e Importante
-                newPriority = 'high';
+                // Si tiene high o highest, mantenerla. Si no, poner high
+                if (task.priority !== 'high' && task.priority !== 'highest') {
+                    newPriority = 'high';
+                }
                 tagsToAdd = ['#noturgent'];
                 tagsToRemove = ['#urgent'];
                 break;
             case 'q3': // Urgente y No importante
-                newPriority = 'medium';
+                // Si tiene normal, low o lowest, mantenerla. Si no, poner normal
+                if (task.priority !== 'normal' && task.priority !== 'low' && task.priority !== 'lowest') {
+                    newPriority = 'normal';
+                }
                 tagsToAdd = ['#urgent'];
                 tagsToRemove = ['#noturgent'];
                 break;
             case 'q4': // No urgente y No importante
-                newPriority = 'low';
+                // Si tiene normal, low o lowest, mantenerla. Si no, poner normal
+                if (task.priority !== 'normal' && task.priority !== 'low' && task.priority !== 'lowest') {
+                    newPriority = 'normal';
+                }
                 tagsToAdd = ['#noturgent'];
                 tagsToRemove = ['#urgent'];
                 break;
@@ -2521,6 +2592,8 @@ class EisenhowerMatrix {
                 overflow: hidden;
             }
 
+            .priority-dropdown-fixed,
+            .status-dropdown-fixed,
             .quadrant-dropdown-fixed {
                 position: fixed;
                 background: var(--background-primary);
@@ -2528,8 +2601,12 @@ class EisenhowerMatrix {
                 border-radius: 8px;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.15);
                 z-index: 10000;
-                min-width: 240px;
+                min-width: 200px;
                 overflow: hidden;
+            }
+
+            .quadrant-dropdown-fixed {
+                min-width: 240px;
             }
 
             .priority-option,
