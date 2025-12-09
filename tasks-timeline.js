@@ -2001,7 +2001,7 @@ class TasksTimeline {
                 text: task.text,
                 taskId: taskId
             };
-            e.dataTransfer.setData('text/plain', JSON.stringify(taskData));
+            e.dataTransfer.setData('application/x-obsidian-task', JSON.stringify(taskData));
             e.dataTransfer.effectAllowed = 'move';
             taskEl.classList.add('dragging');
         });
@@ -3059,16 +3059,35 @@ class TasksTimeline {
             e.stopPropagation();
             dropZone.classList.remove('drag-over');
 
-            const data = e.dataTransfer.getData('text/plain');
+            // Intentar obtener datos con nuestro tipo específico primero
+            let data = e.dataTransfer.getData('application/x-obsidian-task');
             
+            if (!data) {
+                data = e.dataTransfer.getData('text/plain');
+            }
+
             if (!data) {
                 new Notice('❌ No se pudo obtener los datos de la tarea');
                 return;
             }
 
+            // Validar que los datos sean JSON válido antes de parsear
+            let taskData;
+
             try {
-                const taskData = JSON.parse(data);
-                
+                // Verificar que parece JSON (empieza con { o [)
+                if (!data.trim().startsWith('{') && !data.trim().startsWith('[')) {
+                    new Notice('❌ Datos de tarea inválidos');
+                    return;
+                }
+
+                taskData = JSON.parse(data);
+            } catch (error) {
+                console.error('Error al parsear datos de tarea:', error);
+                new Notice('❌ Error al procesar los datos de la tarea');
+                return;
+            }
+
                 const originalElement = document.getElementById(taskData.taskId);
                 
                 if (!originalElement) {
@@ -3123,10 +3142,6 @@ class TasksTimeline {
                 }, 0);
                 
                 new Notice(`✅ Tarea movida a: ${label}`);
-            } catch (error) {
-                new Notice(`❌ Error: ${error.message}`);
-                console.error('Error:', error);
-            }
         });
     }
 
