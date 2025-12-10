@@ -1084,15 +1084,15 @@ class TasksTimeline {
             if (cleanLine.includes('⏫')) return 1;  // highest
             if (cleanLine.includes('🔼')) return 2;  // high
             if (cleanLine.includes('🔽')) return 4;  // low
-            if (cleanLine.includes('⏬')) return 5;  // lowest
-            return 3;  // sin prioridad (medio)
+            if (cleanLine.includes('⬇')) return 5;  // lowest
+            return 3;  // sin prioridad (normal/medium)
         };
-        
+
         const getStatusGroup = (line) => {
             // Extraer el estado del checkbox
             const checkboxMatch = line.match(/\[([x\- \/wd])\]/);
             if (!checkboxMatch) return 0; // Por defecto, grupo normal
-            
+
             const state = checkboxMatch[1];
             // Grupo 0: Normal (espacio) y En curso (/)
             if (state === ' ' || state === '/') return 0;
@@ -1103,20 +1103,19 @@ class TasksTimeline {
             // Otros estados (completada, cancelada, etc.)
             return 3;
         };
-        
-        const priorityA = getPriorityValue(lineA);
-        const priorityB = getPriorityValue(lineB);
-        
-        // Primero ordenar por prioridad
-        if (priorityA !== priorityB) {
-            return priorityA - priorityB;
-        }
-        
-        // Si tienen la misma prioridad, ordenar por estado
-        // Normal/En curso primero, luego Waiting, luego Delegated
+
+        // PRIMERO ordenar por estado (grupo)
         const groupA = getStatusGroup(lineA);
         const groupB = getStatusGroup(lineB);
-        return groupA - groupB;
+
+        if (groupA !== groupB) {
+            return groupA - groupB;
+        }
+
+        // Si están en el mismo grupo, ENTONCES ordenar por prioridad
+        const priorityA = getPriorityValue(lineA);
+        const priorityB = getPriorityValue(lineB);
+        return priorityA - priorityB;
     }
 
     // Función helper para normalizar líneas eliminando selectores de variación problemáticos
