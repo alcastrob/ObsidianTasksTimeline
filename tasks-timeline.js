@@ -1275,7 +1275,10 @@ class TasksTimeline {
         refreshBtn.style.fontSize = '11px';
         refreshBtn.style.padding = '4px 8px';
         refreshBtn.style.fontWeight = 'normal';
-        refreshBtn.addEventListener('click', () => this.render());
+        refreshBtn.addEventListener('click', () => {
+            this.hideTaskOverlay();
+            this.render();
+        });
         
         // Dropdown de Columnas (solo si NO estamos en modo nextWeek)
         if (this.config.daysView !== 'nextWeek') {
@@ -1752,7 +1755,7 @@ class TasksTimeline {
                     taskItem.style.opacity = '1';
                     taskItem.style.transform = 'translateX(0)';
                 }, 10);
-            } else {
+            } else {    
                 taskItem.style.opacity = '0';
                 taskItem.style.transform = 'translateX(-10px)';
                 setTimeout(() => {
@@ -1778,7 +1781,10 @@ class TasksTimeline {
         const dateStr = this.formatDate(dateObj);
 
         const header = dayContainer.createEl('div', { cls: 'day-header' });
-        header.createEl('span', { text: label, cls: 'day-label' });
+        const labelSpan = header.createEl('span', { cls: 'day-label' });
+        labelSpan.createSpan({ text: label });
+        const countBadge = labelSpan.createSpan({ text: ' (0)', cls: 'task-count-badge' });
+        countBadge.style.cssText = 'font-size: 11px; opacity: 0.7; font-weight: normal;';
         header.createEl('span', { text: this.formatDateDisplay(dateObj), cls: 'day-date' });
 
         const tasksList = dayContainer.createDiv('tasks-list');
@@ -1798,8 +1804,12 @@ class TasksTimeline {
             for (const task of activeTasks) {
                 this.createTaskElement(tasksList, task);
             }
+            // Actualizar contador inicial
+            countBadge.textContent = ` (${activeTasks.length})`;
         }
 
+        // Actualizar contador inicial
+        countBadge.textContent = ` (${activeTasks.length})`;
         this.setupDropZone(tasksList, dateStr, label);
     }
 
@@ -1819,7 +1829,10 @@ class TasksTimeline {
         dayContainer.setAttribute('data-days-offset', '0');
 
         const header = dayContainer.createEl('div', { cls: 'day-header' });
-        header.createEl('span', { text: '⚠️ Retrasadas', cls: 'day-label' });
+        const labelSpan = header.createEl('span', { cls: 'day-label' });
+        labelSpan.createSpan({ text: '⚠️ Retrasadas' });
+        const countBadge = labelSpan.createSpan({ text: ` (${overdueTasks.length})`, cls: 'task-count-badge' });
+        countBadge.style.cssText = 'font-size: 11px; opacity: 0.7; font-weight: normal;';
 
         // Botón "Postponer" para mover todas las tareas a hoy
         const postponeBtn = dayContainer.createEl('button', { text: '⏭️ Postponer todas', cls: 'postpone-btn' });
@@ -1853,7 +1866,10 @@ class TasksTimeline {
         dayContainer.setAttribute('data-days-offset', '0');
 
         const header = dayContainer.createEl('div', { cls: 'day-header' });
-        header.createEl('span', { text: '📋 Sin Fecha', cls: 'day-label' });
+        const labelSpan = header.createEl('span', { cls: 'day-label' });
+        labelSpan.createSpan({ text: '📋 Sin Fecha' });
+        const countBadge = labelSpan.createSpan({ text: ' (0)', cls: 'task-count-badge' });
+        countBadge.style.cssText = 'font-size: 11px; opacity: 0.7; font-weight: normal;';
 
         const tasksList = dayContainer.createDiv('tasks-list');
         tasksList.classList.add('droppable');
@@ -1870,6 +1886,8 @@ class TasksTimeline {
             for (const task of noDateTasks) {
                 this.createTaskElement(tasksList, task);
             }
+            // Actualizar contador inicial
+            countBadge.textContent = ` (${noDateTasks.length})`;
         }
 
         this.setupDropZone(tasksList, null, 'Sin Fecha');
@@ -1897,15 +1915,17 @@ class TasksTimeline {
             e.stopPropagation();
             const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
             await this.cancelTask(task);
-            
+
             taskEl.style.opacity = '0';
             taskEl.style.transform = 'translateX(-20px)';
             setTimeout(() => {
+                const parentList = taskEl.closest('.tasks-list');
                 taskEl.remove();
+                this.updateColumnCount(parentList);
                 const timelineMain = this.container.querySelector('.timeline-main');
                 if (timelineMain) timelineMain.scrollLeft = scrollPos;
             }, 300);
-            
+
             new Notice('🚫 Tarea cancelada');
         });
 
@@ -1924,12 +1944,14 @@ class TasksTimeline {
         checkbox.addEventListener('change', async (e) => {
             const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
             await this.toggleTaskComplete(task, e.target.checked);
-            
+
             if (e.target.checked) {
                 taskEl.style.opacity = '0';
                 taskEl.style.transform = 'translateX(20px)';
                 setTimeout(() => {
+                    const parentList = taskEl.closest('.tasks-list');
                     taskEl.remove();
+                    this.updateColumnCount(parentList);
                     const timelineMain = this.container.querySelector('.timeline-main');
                     if (timelineMain) timelineMain.scrollLeft = scrollPos;
                 }, 300);
@@ -3135,6 +3157,10 @@ class TasksTimeline {
                 // Encontrar la posición correcta para insertar la tarea según su prioridad
                 this.insertTaskByPriority(dropZone, taskInfo);
                 
+                // Actualizar contadores de ambas columnas
+                this.updateColumnCount(originalParent);
+                this.updateColumnCount(dropZone);
+
                 setTimeout(() => {
                     const timelineMain = this.container.querySelector('.timeline-main');
                     if (timelineMain) timelineMain.scrollLeft = scrollPos;
@@ -3142,6 +3168,20 @@ class TasksTimeline {
                 
                 new Notice(`✅ Tarea movida a: ${label}`);
         });
+    }
+
+    updateColumnCount(tasksList) {
+        const dayContainer = tasksList.closest('.day-container');
+        if (!dayContainer) return;
+        
+        const countBadge = dayContainer.querySelector('.task-count-badge');
+        if (!countBadge) return;
+        
+        // Contar tareas visibles (no ocultas por filtros)
+        const visibleTasks = Array.from(tasksList.querySelectorAll('.task-item'))
+            .filter(task => task.style.display !== 'none');
+        
+        countBadge.textContent = ` (${visibleTasks.length})`;
     }
 
     async getTasksForDate(date) {
