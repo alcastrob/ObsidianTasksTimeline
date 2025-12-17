@@ -2273,10 +2273,10 @@ class TasksTimeline {
         overlay.id = 'task-overlay-' + Date.now();
 
         const header = overlay.createDiv('task-overlay-header');
-        if (linkType === '⛔') {
+        if (linkType === '⛓') {
             header.textContent = allLinkedTasks.length > 1 
-                ? `⛔ Tareas bloqueantes (${allLinkedTasks.length})`
-                : '⛔ Tarea bloqueante';
+                ? `⛓ Tareas bloqueantes (${allLinkedTasks.length})`
+                : '⛓ Tarea bloqueante';
         } else {
             header.textContent = allLinkedTasks.length > 1 
                 ? `🆔 Tareas dependientes (${allLinkedTasks.length})`
@@ -2331,13 +2331,35 @@ class TasksTimeline {
         
         overlay.addEventListener('mouseleave', () => {
             this.overlayHovered = false;
-            // Delay para permitir regresar al trigger
+            // Cerrar inmediatamente si el trigger tampoco está hovered
             setTimeout(() => {
                 if (!this.overlayHovered && !this.triggerHovered) {
                     this.hideTaskOverlay();
                 }
             }, 100);
         });
+        
+        // NUEVO: Cerrar overlay al hacer scroll
+        const scrollHandler = () => {
+            this.hideTaskOverlay();
+        };
+        
+        // Escuchar scroll en múltiples contenedores
+        const zoomWrapper = this.container.querySelector('.zoom-wrapper');
+        const timelineMain = this.container.querySelector('.timeline-main');
+        const tasksLists = this.container.querySelectorAll('.tasks-list');
+        
+        if (zoomWrapper) zoomWrapper.addEventListener('scroll', scrollHandler, { once: true });
+        if (timelineMain) timelineMain.addEventListener('scroll', scrollHandler, { once: true });
+        tasksLists.forEach(list => list.addEventListener('scroll', scrollHandler, { once: true }));
+        
+        // Guardar referencias para limpiar después
+        this.currentOverlayScrollHandlers = {
+            zoomWrapper,
+            timelineMain,
+            tasksLists: Array.from(tasksLists),
+            handler: scrollHandler
+        };
     }
 
     hideTaskOverlay() {
@@ -2347,6 +2369,15 @@ class TasksTimeline {
             this.currentOverlayTrigger = null;
             this.overlayHovered = false;
             this.triggerHovered = false;
+        }
+
+        // Limpiar cualquier overlay huérfano que pueda existir
+        const orphanOverlays = document.querySelectorAll('.task-overlay');
+        orphanOverlays.forEach(overlay => overlay.remove());
+
+        // Limpiar scroll handlers si existen
+        if (this.currentOverlayScrollHandlers) {
+            this.currentOverlayScrollHandlers = null;
         }
     }
 
