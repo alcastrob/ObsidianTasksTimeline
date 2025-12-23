@@ -35,6 +35,7 @@ class EisenhowerMatrix {
             groupBy: this.config.groupBy,
             searchText: "",
             todayOnly: false,
+            showUnclassified: true, // NUEVO: controla visibilidad de columna sin clasificar
             states: {
                 notStarted: true,    // ' '
                 inProgress: true,    // '/'
@@ -298,7 +299,7 @@ class EisenhowerMatrix {
 
         // Búsqueda
         const searchContainer = topBar.createDiv({ cls: "search-container" });
-        searchContainer.createSpan({ text: "🔍", cls: "search-icon" });
+        searchContainer.createSpan({ text: "🔎", cls: "search-icon" });
         const searchInput = searchContainer.createEl("input", {
             type: "text",
             placeholder: "Buscar tareas...",
@@ -323,6 +324,23 @@ class EisenhowerMatrix {
         });
         todayCheckbox.addEventListener("change", (e) => {
             this.filters.todayOnly = e.target.checked;
+            this.refreshMatrix();
+        });
+
+        // NUEVO: Filtro "Mostrar sin clasificar"
+        const unclassifiedFilterContainer = topBar.createDiv({ cls: "filter-container" });
+        const unclassifiedCheckbox = unclassifiedFilterContainer.createEl("input", {
+            type: "checkbox",
+            cls: "today-checkbox",
+            attr: { id: "unclassified-filter", checked: true }
+        });
+        const unclassifiedLabel = unclassifiedFilterContainer.createEl("label", {
+            text: "Sin clasificar",
+            cls: "today-label",
+            attr: { for: "unclassified-filter" }
+        });
+        unclassifiedCheckbox.addEventListener("change", (e) => {
+            this.filters.showUnclassified = e.target.checked;
             this.refreshMatrix();
         });
 
@@ -644,26 +662,27 @@ class EisenhowerMatrix {
             tasksByQuadrant[quadrant] = this.sortTasks(tasksByQuadrant[quadrant]);
         });
 
-        // Verificar si hay tareas sin clasificar
+        // MODIFICADO: Verificar si se debe mostrar la columna sin clasificar
         const hasUnclassifiedTasks = tasksByQuadrant.unclassified && tasksByQuadrant.unclassified.length > 0;
+        const showUnclassified = this.filters.showUnclassified && hasUnclassifiedTasks;
         
-        // Ajustar CSS del grid según si hay tareas sin clasificar
-        if (hasUnclassifiedTasks) {
+        // Ajustar CSS del grid según si hay tareas sin clasificar Y el filtro está activo
+        if (showUnclassified) {
             matrixContainer.style.gridTemplateColumns = "1fr 1fr 1fr";
         } else {
             matrixContainer.style.gridTemplateColumns = "1fr 1fr";
         }
 
         // Crear cuadrantes en orden específico para el layout
-        // Fila 1: Q1, Q2, Unclassified (inicio, solo si hay tareas)
+        // Fila 1: Q1, Q2, Unclassified (inicio, solo si hay tareas Y el filtro está activo)
         this.createQuadrant(matrixContainer, "q1", "🔴 Urgente e Importante", 
                           "Hacer inmediatamente", tasksByQuadrant.q1);
         
         this.createQuadrant(matrixContainer, "q2", "🟢 No urgente e Importante", 
                           "Planificar y programar", tasksByQuadrant.q2);
         
-        // Solo crear cuadrante Sin clasificar si hay tareas
-        if (hasUnclassifiedTasks) {
+        // Solo crear cuadrante Sin clasificar si hay tareas Y el filtro está activo
+        if (showUnclassified) {
             this.createQuadrant(matrixContainer, "unclassified", "📋 Sin clasificar", 
                               "Arrastra para clasificar", tasksByQuadrant.unclassified);
         }
@@ -897,7 +916,7 @@ class EisenhowerMatrix {
         let currentIndex = 0;
 
         // Regex mejorados
-        const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9,]+)/g; // Soporta múltiples IDs separados por comas
+        const taskLinkRegex = /(⛓|🆔)\s*([a-zA-Z0-9,]+)/g; // Soporta múltiples IDs separados por comas
         const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
         const tagRegex = /#[\w\-áéíóúñÑ]+/gi;
 
@@ -1848,10 +1867,10 @@ class EisenhowerMatrix {
         this.currentOverlay = overlay;
 
         const header = overlay.createDiv('task-overlay-header');
-        if (linkType === '⛔') {
+        if (linkType === '⛓') {
             header.textContent = allLinkedTasks.length > 1
-                ? `⛔ Tareas bloqueantes (${allLinkedTasks.length})`
-                : '⛔ Tarea bloqueante';
+                ? `⛓ Tareas bloqueantes (${allLinkedTasks.length})`
+                : '⛓ Tarea bloqueante';
         } else {
             header.textContent = allLinkedTasks.length > 1 
                 ? `🆔 Tareas dependientes (${allLinkedTasks.length})`
@@ -1933,7 +1952,7 @@ class EisenhowerMatrix {
         }
         
         // Determinar qué patrón buscar según el tipo de enlace
-        const searchPattern = linkType === '⛔' ? '🆔' : '⛔';
+        const searchPattern = linkType === '⛓' ? '🆔' : '⛓';
         
         for (const file of files) {
             const content = await this.dv.app.vault.read(file);
@@ -1982,8 +2001,8 @@ class EisenhowerMatrix {
                                 fullLine: line
                             };
                             
-                            // Si es ⛔ (before), solo devolver la primera tarea encontrada
-                            if (linkType === '⛔') {
+                            // Si es ⛓ (before), solo devolver la primera tarea encontrada
+                            if (linkType === '⛓') {
                                 return [taskInfo];
                             }
                             
