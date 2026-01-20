@@ -3717,22 +3717,91 @@ class TasksTimeline {
     }
 
     async toggleTaskComplete(task, completed) {
-        const file = this.app.vault.getAbstractFileByPath(task.file.path);
-        if (!file || file.extension !== 'md') return;
+    const file = this.app.vault.getAbstractFileByPath(task.file.path);
+    if (!file || file.extension !== 'md') return;
 
-        const content = await this.app.vault.read(file);
-        const lines = content.split('\n');
+    const content = await this.app.vault.read(file);
+    const lines = content.split('\n');
 
-        if (task.line >= lines.length) return;
+    if (task.line >= lines.length) return;
 
-        const line = lines[task.line];
-        const newLine = completed 
-            ? line.replace(/\[[x\- \/wd]\]/, '[x]')  // Reemplazar cualquier estado por [x]
-            : line.replace(/\[x\]/, '[ ]');
+    const originalLine = lines[task.line];
 
+    if (completed) {
+        // Completar tarea: cambiar estado a [x] y añadir fecha de finalización
+        
+        // Extraer indentación
+        const indentMatch = originalLine.match(/^(\s*)/u);
+        const indent = indentMatch ? indentMatch[1] : '';
+        
+        // Extraer tipo de lista
+        const listMarkerMatch = originalLine.match(/^[\s]*([-*])/u);
+        const listMarker = listMarkerMatch ? listMarkerMatch[1] : '-';
+        
+        // Extraer emojis de prioridad
+        const priorityMatch = originalLine.match(/[🔺⏫🔼🔽⬇]/u);
+        const priority = priorityMatch ? priorityMatch[0] : '';
+        
+        // Extraer emojis de recurrencia
+        const recurrenceMatch = originalLine.match(/[🔁♻️]/u);
+        const recurrence = recurrenceMatch ? recurrenceMatch[0] : '';
+        
+        // Extraer otras fechas para preservarlas
+        const dates = [];
+        const startDateMatch = originalLine.match(/🛫\s*(\d{4}-\d{2}-\d{2})/u);
+        if (startDateMatch) dates.push(`🛫 ${startDateMatch[1]}`);
+        
+        const dueDateMatch = originalLine.match(/📅\s*(\d{4}-\d{2}-\d{2})/u);
+        if (dueDateMatch) dates.push(`📅 ${dueDateMatch[1]}`);
+        
+        const scheduledMatch = originalLine.match(/⏳\s*(\d{4}-\d{2}-\d{2})/u);
+        if (scheduledMatch) dates.push(`⏳ ${scheduledMatch[1]}`);
+        
+        // Verificar si ya tiene fecha de finalización (no duplicar)
+        const doneDateMatch = originalLine.match(/✅\s*(\d{4}-\d{2}-\d{2})/u);
+        
+        // Extraer texto limpio
+        let taskText = originalLine
+            .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
+            .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
+            .replace(/[🔺⏫🔼🔽⬇]/gu, '')
+            .replace(/[🔁♻️]/gu, '')
+            .replace(/#[\w-]+\s*$/gu, '')
+            .trim();
+        // Reconstruir la línea con estado completado [x]
+        let newLine = `${indent}${listMarker} [x] ${taskText}`;
+        // Añadir prioridad si existía
+        if (priority) {
+            newLine += ` ${priority}`;
+        }
+        // Añadir recurrencia si existía
+        if (recurrence) {
+            newLine += ` ${recurrence}`;
+        }
+        // Añadir fechas que existían
+        if (dates.length > 0) {
+            newLine += ' ' + dates.join(' ');
+        }
+        // Añadir fecha de finalización si no existe ya
+        if (!doneDateMatch) {
+            const today = new Date();
+            const doneDate = this.formatDate(today);
+            newLine += ` ✅ ${doneDate}`;
+        } else {
+            // Si ya existía, preservarla
+            newLine += ` ✅ ${doneDateMatch[1]}`;
+        }
         lines[task.line] = newLine;
-        await this.app.vault.modify(file, lines.join('\n'));
+    } else {
+        // Descompletar tarea: cambiar [x] a [ ] y quitar fecha de finalización
+        const newLine = originalLine
+            .replace(/\[x\]/u, '[ ]')
+            .replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/u, ''); // Eliminar fecha de finalización
+        lines[task.line] = newLine;
     }
+
+    await this.app.vault.modify(file, lines.join('\n'));
+}
 
     async cancelTask(task) {
         const file = this.app.vault.getAbstractFileByPath(task.file.path);
