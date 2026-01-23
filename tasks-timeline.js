@@ -3466,32 +3466,17 @@ class TasksTimeline {
     const scheduledMatch = originalLine.match(/⏳\s*(\d{4}-\d{2}-\d{2})/u);
     if (scheduledMatch) otherDates.push(`⏳ ${scheduledMatch[1]}`);
 
-    // Extraer etiquetas para preservarlas
-    const tagsMatches = originalLine.match(/#[\w\-áéíóúñü]+/gu);
-    const tags = tagsMatches
-      ? tagsMatches.filter((tag) => {
-          const tagLower = tag.toLowerCase();
-          return tagLower !== '#urgent' && tagLower !== '#noturgent';
-        })
-      : [];
-
     // Extraer texto limpio de la línea ORIGINAL
     let taskText = originalLine
-      .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '') // Quitar checkbox
-      .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '') // Quitar fechas
-      .replace(/[🔺⏫🔼🔽⬇]/gu, '') // Quitar prioridad temporalmente
-      .replace(/[🔁♻️]/gu, '') // Quitar recurrencia temporalmente
-      .replace(/#[\w\-áéíóúñü]+/gu, '') // Quitar tags temporalmente
-      .replace(/\s+/g, ' ') // Normalizar espacios
+      .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
+      .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
+      .replace(/[🔺⏫🔼🔽⬇]/gu, '')
+      .replace(/[🔁♻️]/gu, '')
+      .replace(/\s+/g, ' ')
       .trim();
 
     // Reconstruir la línea con todos los metadatos preservados
     let newLine = `${indent}${listMarker} [${checkboxState}] ${taskText}`;
-
-    // Añadir etiquetas si existían
-    if (tags.length > 0) {
-      newLine += ' ' + tags.join(' ');
-    }
 
     // Añadir prioridad si existía
     if (priority) {
@@ -3562,32 +3547,16 @@ class TasksTimeline {
     const scheduledMatch = originalLine.match(/⏳\s*(\d{4}-\d{2}-\d{2})/u);
     if (scheduledMatch) otherDates.push(`⏳ ${scheduledMatch[1]}`);
 
-    // Extraer etiquetas para preservarlas
-    const tagsMatches = originalLine.match(/#[\w\-áéíóúñü]+/gu);
-    const tags = tagsMatches
-      ? tagsMatches.filter((tag) => {
-          const tagLower = tag.toLowerCase();
-          return tagLower !== '#urgent' && tagLower !== '#noturgent';
-        })
-      : [];
-
     // Extraer texto limpio de la línea ORIGINAL
     let taskText = originalLine
       .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
       .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
       .replace(/[🔺⏫🔼🔽⬇]/gu, '')
       .replace(/[🔁♻️]/gu, '')
-      .replace(/#[\w\-áéíóúñü]+/gu, '')
       .replace(/\s+/g, ' ')
       .trim();
-
     // Reconstruir la línea sin fecha de inicio
     let newLine = `${indent}${listMarker} [${checkboxState}] ${taskText}`;
-
-    // Añadir etiquetas si existían
-    if (tags.length > 0) {
-      newLine += ' ' + tags.join(' ');
-    }
 
     if (priority) {
       newLine += ` ${priority}`;
@@ -3649,32 +3618,17 @@ class TasksTimeline {
     const scheduledMatch = originalLine.match(/⏳\s*(\d{4}-\d{2}-\d{2})/u);
     if (scheduledMatch) dates.push(`⏳ ${scheduledMatch[1]}`);
 
-    // Extraer etiquetas para preservarlas
-    const tagsMatches = originalLine.match(/#[\w\-áéíóúñü]+/gu);
-    const tags = tagsMatches
-      ? tagsMatches.filter((tag) => {
-          const tagLower = tag.toLowerCase();
-          return tagLower !== '#urgent' && tagLower !== '#noturgent';
-        })
-      : [];
-
     // Extraer texto limpio de la línea ORIGINAL
     let taskText = originalLine
       .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
       .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
-      .replace(/[🔺⏫🔼🔽⬇]/gu, '') // Quitar prioridad antigua
+      .replace(/[🔺⏫🔼🔽⬇]/gu, '')
       .replace(/[🔁♻️]/gu, '')
-      .replace(/#[\w\-áéíóúñü]+/gu, '')
       .replace(/\s+/g, ' ')
       .trim();
 
     // Reconstruir la línea
     let newLine = `${indent}${listMarker} [${checkboxState}] ${taskText}`;
-
-    // Añadir etiquetas si existían
-    if (tags.length > 0) {
-      newLine += ' ' + tags.join(' ');
-    }
 
     // Añadir la nueva prioridad si existe
     if (newPriority) {
@@ -3738,32 +3692,17 @@ class TasksTimeline {
     const scheduledMatch = originalLine.match(/⏳\s*(\d{4}-\d{2}-\d{2})/u);
     if (scheduledMatch) dates.push(`⏳ ${scheduledMatch[1]}`);
 
-    // Extraer etiquetas para preservarlas
-    const tagsMatches = originalLine.match(/#[\w\-áéíóúñü]+/gu);
-    const tags = tagsMatches
-      ? tagsMatches.filter((tag) => {
-          const tagLower = tag.toLowerCase();
-          return tagLower !== '#urgent' && tagLower !== '#noturgent';
-        })
-      : [];
-
     // Extraer texto limpio de la línea ORIGINAL
     let taskText = originalLine
       .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
       .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
       .replace(/[🔺⏫🔼🔽⬇]/gu, '')
       .replace(/[🔁♻️]/gu, '')
-      .replace(/#[\w\-áéíóúñü]+/gu, '')
       .replace(/\s+/g, ' ')
       .trim();
 
     // Reconstruir la línea con el nuevo estado
     let newLine = `${indent}${listMarker} [${newStatus}] ${taskText}`;
-
-    // Añadir etiquetas si existían
-    if (tags.length > 0) {
-      newLine += ' ' + tags.join(' ');
-    }
 
     // Añadir prioridad si existía
     if (priority) {
@@ -3828,32 +3767,17 @@ class TasksTimeline {
       // Verificar si ya tiene fecha de finalización (no duplicar)
       const doneDateMatch = originalLine.match(/✅\s*(\d{4}-\d{2}-\d{2})/u);
 
-      // Extraer etiquetas para preservarlas
-      const tagsMatches = originalLine.match(/#[\w\-áéíóúñü]+/gu);
-      const tags = tagsMatches
-        ? tagsMatches.filter((tag) => {
-            const tagLower = tag.toLowerCase();
-            return tagLower !== '#urgent' && tagLower !== '#noturgent';
-          })
-        : [];
-
       // Extraer texto limpio
       let taskText = originalLine
         .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
         .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
         .replace(/[🔺⏫🔼🔽⬇]/gu, '')
         .replace(/[🔁♻️]/gu, '')
-        .replace(/#[\w\-áéíóúñü]+/gu, '')
         .replace(/\s+/g, ' ')
         .trim();
 
       // Reconstruir la línea con estado completado [x]
       let newLine = `${indent}${listMarker} [x] ${taskText}`;
-
-      // Añadir etiquetas si existían
-      if (tags.length > 0) {
-        newLine += ' ' + tags.join(' ');
-      }
 
       // Añadir prioridad si existía
       if (priority) {
