@@ -1927,10 +1927,15 @@ class TasksTimeline {
     });
 
     const tasksList = dayContainer.createDiv('tasks-list');
+    tasksList.classList.add('droppable');
 
     for (const task of overdueTasks) {
       this.createTaskElement(tasksList, task);
     }
+
+    // Configurar drop zone para permitir arrastrar tareas a "Retrasadas"
+    // targetDate se ignora porque se calculará como "ayer" en setupDropZone
+    this.setupDropZone(tasksList, null, '⚠️ Retrasadas');
   }
 
   async createNoDateContainer(parent) {
@@ -2961,10 +2966,22 @@ class TasksTimeline {
 
       await new Promise((resolve) => setTimeout(resolve, 50));
 
-      if (targetDate === null) {
+      // Determinar la fecha objetivo
+      let finalTargetDate = targetDate;
+      
+      // Si se arrastra a la columna "Retrasadas", usar la fecha de ayer
+      const isOverdueColumn = dropZone.closest('.overdue-container');
+      if (isOverdueColumn) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
+        finalTargetDate = this.formatDate(yesterday);
+      }
+
+      if (finalTargetDate === null) {
         await this.removeTaskDate(taskData.file, taskData.line, taskData.fullLine);
       } else {
-        await this.updateTaskDate(taskData.file, taskData.line, taskData.fullLine, targetDate);
+        await this.updateTaskDate(taskData.file, taskData.line, taskData.fullLine, finalTargetDate);
       }
 
       const file = this.app.vault.getAbstractFileByPath(taskData.file);
@@ -2979,7 +2996,7 @@ class TasksTimeline {
         text: taskData.text || 'Tarea',
         file: file,
         line: taskData.line,
-        date: targetDate,
+        date: finalTargetDate,
         fullLine: updatedFullLine,
         completed: false,
         cancelled: false,
