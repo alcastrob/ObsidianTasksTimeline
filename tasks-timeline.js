@@ -956,6 +956,7 @@ class TasksTimeline {
       showDelegated: true,
       showNextWeek: true,
       showNoDate: true,
+      showOverdue: null, // null = automático, true = siempre mostrar, false = nunca mostrar
       searchText: '', // Texto de búsqueda
     };
 
@@ -1299,6 +1300,62 @@ class TasksTimeline {
 
       const columnDropdownMenu = columnDropdownContainer.createDiv('filter-dropdown-menu');
 
+      // Opción: Retrasadas
+      const overdueOption = columnDropdownMenu.createDiv('filter-option');
+      const overdueCheckbox = overdueOption.createDiv('filter-checkbox');
+
+      // Estado visual del checkbox según el filtro
+      if (this.filters.showOverdue === null) {
+        // Auto: mostrar icono especial para indicar modo automático
+        overdueCheckbox.style.background = 'var(--interactive-accent)';
+        overdueCheckbox.style.borderColor = 'var(--interactive-accent)';
+        overdueCheckbox.style.opacity = '0.5';
+        const autoIcon = overdueCheckbox.createSpan({ text: 'A' });
+        autoIcon.style.cssText = 'color: var(--text-on-accent); font-size: 10px; font-weight: bold;';
+      } else if (this.filters.showOverdue === true) {
+        // Forzar mostrar: checkbox marcado normal
+        overdueCheckbox.classList.add('checked');
+      } else {
+        // Forzar ocultar: checkbox desmarcado
+        // (sin clase 'checked')
+      }
+
+      const overdueLabel = overdueOption.createSpan({ cls: 'filter-option-label' });
+      overdueLabel.createSpan({ text: '⚠️ Retrasadas' });
+
+      // Añadir indicador de modo
+      if (this.filters.showOverdue === null) {
+        overdueLabel.createSpan({
+          text: ' (auto)',
+          cls: 'mode-indicator',
+        }).style.cssText = 'font-size: 10px; opacity: 0.6; margin-left: 4px;';
+      } else if (this.filters.showOverdue === true) {
+        overdueLabel.createSpan({
+          text: ' (siempre)',
+          cls: 'mode-indicator',
+        }).style.cssText = 'font-size: 10px; opacity: 0.6; margin-left: 4px;';
+      } else {
+        overdueLabel.createSpan({
+          text: ' (oculto)',
+          cls: 'mode-indicator',
+        }).style.cssText = 'font-size: 10px; opacity: 0.6; margin-left: 4px;';
+      }
+
+      overdueOption.addEventListener('click', (e) => {
+        e.stopPropagation();
+
+        // Ciclo de tres estados: auto → ocultar → mostrar → auto
+        if (this.filters.showOverdue === null) {
+          this.filters.showOverdue = false; // Auto → Ocultar
+        } else if (this.filters.showOverdue === false) {
+          this.filters.showOverdue = true; // Ocultar → Mostrar siempre
+        } else {
+          this.filters.showOverdue = null; // Mostrar → Auto
+        }
+
+        this.render();
+      });
+
       // Opción: Próxima semana
       const nextWeekOption = columnDropdownMenu.createDiv('filter-option');
       const nextWeekCheckbox = nextWeekOption.createDiv('filter-checkbox');
@@ -1534,8 +1591,16 @@ class TasksTimeline {
         daysUntilNextMonday = 8 - dayOfWeek;
       }
 
-      // Siempre mostrar tareas atrasadas (si las hay)
-      await this.createOverdueContainer(timelineMain, today);
+      // Mostrar tareas atrasadas según filtro
+      const overdueTasks = await this.getOverdueTasks(today);
+      const shouldShowOverdue =
+        this.filters.showOverdue === null
+          ? overdueTasks.length > 0 // Automático: mostrar solo si hay tareas
+          : this.filters.showOverdue; // Manual: respetar configuración del usuario
+
+      if (shouldShowOverdue) {
+        await this.createOverdueContainer(timelineMain, today, overdueTasks);
+      }
 
       // Mostrar los 5 días de la próxima semana (Lunes a Viernes)
       const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
@@ -1560,8 +1625,24 @@ class TasksTimeline {
         }
       }
 
-      // Siempre mostrar tareas atrasadas
-      await this.createOverdueContainer(timelineMain, today);
+      // Mostrar tareas atrasadas según filtro
+      const overdueTasks = await this.getOverdueTasks(today);
+      let shouldShowOverdue = false;
+
+      if (this.filters.showOverdue === null) {
+        // Automático: mostrar solo si hay tareas
+        shouldShowOverdue = overdueTasks.length > 0;
+      } else if (this.filters.showOverdue === true) {
+        // Forzar mostrar siempre
+        shouldShowOverdue = true;
+      } else if (this.filters.showOverdue === false) {
+        // Forzar ocultar siempre
+        shouldShowOverdue = false;
+      }
+
+      if (shouldShowOverdue) {
+        await this.createOverdueContainer(timelineMain, today, overdueTasks);
+      }
 
       // Mostrar "Hoy" (siempre)
       await this.createDayContainer(timelineMain, 'Hoy', 0, today);
@@ -1821,16 +1902,13 @@ class TasksTimeline {
     this.setupDropZone(tasksList, dateStr, label);
   }
 
-  async createOverdueContainer(parent, today) {
-    const overdueTasks = await this.getOverdueTasks(today);
+  async createOverdueContainer(parent, today, overdueTasks = null) {
+    if (!overdueTasks) {
+      overdueTasks = await this.getOverdueTasks(today);
+    }
 
     // Ordenar tareas por prioridad
     overdueTasks.sort((a, b) => this.comparePriority(a.fullLine, b.fullLine));
-
-    // Si no hay tareas retrasadas, no crear la columna
-    if (overdueTasks.length === 0) {
-      return;
-    }
 
     const dayContainer = parent.createDiv('day-container');
     dayContainer.classList.add('overdue-container');
