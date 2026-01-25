@@ -1172,7 +1172,7 @@ class TasksTimeline {
       case 'in-progress':
         return '🔄';
       case 'waiting':
-        return '⸏';
+        return '⏳';
       case 'delegated':
         return '👤';
       default:
@@ -1663,7 +1663,7 @@ class TasksTimeline {
     const statusOptions = [
       { filter: 'showNormal', label: '⚪ No comenzadas' },
       { filter: 'showInProgress', label: '🔄 En curso' },
-      { filter: 'showWaiting', label: '⸏ En espera' },
+      { filter: 'showWaiting', label: '⏳ En espera' },
       { filter: 'showDelegated', label: '👤 Delegadas' },
     ];
 
@@ -2765,7 +2765,7 @@ class TasksTimeline {
     const statuses = [
       { emoji: '✔', label: 'Normal', value: ' ' },
       { emoji: '🔄', label: 'En curso', value: '/' },
-      { emoji: '⸏', label: 'En espera', value: 'w' },
+      { emoji: '⏳', label: 'En espera', value: 'w' },
       { emoji: '👤', label: 'Delegada', value: 'd' },
     ];
 
