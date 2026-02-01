@@ -214,6 +214,11 @@ if (!document.getElementById(cssId)) {
     float: left;
 }
 
+/* Usar los estilos nativos del tema de Obsidian para los checkboxes */
+.task-list-item-checkbox {
+    cursor: pointer;
+}
+
 .task-text {
     display: block;
     color: var(--text-normal);
@@ -2009,9 +2014,33 @@ class TasksTimeline {
     const statusSelector = actions.createDiv('task-status-selector');
     this.createStatusSelector(statusSelector, task, taskEl);
 
-    const checkbox = taskContent.createEl('input', { type: 'checkbox' });
-    checkbox.classList.add('task-checkbox');
+    // Crear checkbox como lo haría Obsidian en una lista de tareas
+    const checkboxLi = taskContent.createEl('li', { cls: 'task-list-item' });
+    checkboxLi.style.cssText = 'list-style: none; float: left; margin: 0; padding: 0; margin-right: 8px; margin-top: 2px;';
+    
+    const checkbox = checkboxLi.createEl('input', { 
+      type: 'checkbox',
+      cls: 'task-list-item-checkbox'
+    });
+    
     checkbox.checked = task.completed;
+    
+    // Configurar el checkbox según el estado para que el tema lo estilice
+    const checkboxState = task.checkboxState || ' ';
+    if (checkboxState === '/') {
+      checkbox.setAttribute('data-task', '/');
+    } else if (checkboxState === 'w') {
+      checkbox.setAttribute('data-task', 'w');
+    } else if (checkboxState === 'd') {
+      checkbox.setAttribute('data-task', 'd');
+    } else if (checkboxState === '-') {
+      checkbox.setAttribute('data-task', '-');
+    } else if (checkboxState === 'x') {
+      checkbox.setAttribute('data-task', 'x');
+    } else {
+      checkbox.setAttribute('data-task', ' ');
+    }
+    
     checkbox.addEventListener('change', async (e) => {
       const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
       await this.toggleTaskComplete(task, e.target.checked);
@@ -2035,11 +2064,7 @@ class TasksTimeline {
       text.classList.add('completed');
     }
 
-    const statusIcon = this.getTaskStatusIcon(task.checkboxState || (task.completed ? 'x' : ' '));
-    if (statusIcon) {
-      text.createSpan({ text: statusIcon + ' ', cls: 'task-status-icon' });
-    }
-
+    // Procesar el texto con markdown
     this.processTaskLinks(text, task.text);
 
     const clearfix = taskContent.createDiv();
@@ -2097,6 +2122,7 @@ class TasksTimeline {
   processTaskLinks(textElement, taskText) {
     const taskLinkRegex = /(⛓|🆔)\s*([a-zA-Z0-9,]+)/g;
     const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+    const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     const tagRegex = /#[\w\-áéíóúñü]+/gi;
 
     const parts = [];
@@ -2107,6 +2133,7 @@ class TasksTimeline {
     const wikiLinkRanges = [];
     let match;
 
+    // Detectar wikilinks
     while ((match = wikiLinkRegex.exec(taskText)) !== null) {
       wikiLinkRanges.push({
         start: match.index,
@@ -2119,6 +2146,24 @@ class TasksTimeline {
         length: match[0].length,
         fullMatch: match[0],
         linkText: match[1],
+      });
+    }
+
+    // Detectar enlaces markdown [texto](url)
+    markdownLinkRegex.lastIndex = 0;
+    while ((match = markdownLinkRegex.exec(taskText)) !== null) {
+      wikiLinkRanges.push({
+        start: match.index,
+        end: match.index + match[0].length,
+      });
+
+      allMatches.push({
+        type: 'markdownLink',
+        index: match.index,
+        length: match[0].length,
+        fullMatch: match[0],
+        linkText: match[1],
+        linkUrl: match[2],
       });
     }
 
@@ -2193,13 +2238,13 @@ class TasksTimeline {
     }
 
     if (parts.length === 0) {
-      textElement.appendText(taskText);
+      this.renderMarkdownText(textElement, taskText);
       return;
     }
 
     parts.forEach((part) => {
       if (part.type === 'text') {
-        textElement.appendText(part.content);
+        this.renderMarkdownText(textElement, part.content);
       } else if (part.type === 'taskLink') {
         const linkSpan = textElement.createSpan({ text: part.content, cls: 'task-link' });
         linkSpan.dataset.linkType = part.linkType;
@@ -2233,10 +2278,22 @@ class TasksTimeline {
             new Notice(`❌ No se encontró el archivo: ${part.linkText}`);
           }
         });
+      } else if (part.type === 'markdownLink') {
+        const markdownLinkSpan = textElement.createEl('a', { 
+          text: part.linkText, 
+          cls: 'external-link',
+          href: part.linkUrl
+        });
+        markdownLinkSpan.setAttribute('target', '_blank');
+        markdownLinkSpan.setAttribute('rel', 'noopener');
+        
+        markdownLinkSpan.addEventListener('click', (e) => {
+          e.stopPropagation();
+        });
       } else if (part.type === 'hiddenTag') {
         // No mostrar nada
       } else if (part.type === 'inlineTag') {
-        textElement.appendText(part.tagText);
+        this.renderMarkdownText(textElement, part.tagText);
       } else if (part.type === 'tag') {
         const tagTextWithoutHash = part.tagText.substring(1);
         const tagSpan = textElement.createSpan({ text: tagTextWithoutHash, cls: 'task-tag' });
@@ -2266,6 +2323,82 @@ class TasksTimeline {
         });
 
         tagSpan.title = `Click para filtrar por ${part.tagText}`;
+      }
+    });
+  }
+
+  renderMarkdownText(container, text) {
+    // Procesar texto con markdown (negritas, cursivas)
+    // Usar un enfoque más simple y directo
+    
+    const parts = [];
+    let currentIndex = 0;
+    
+    // Regex para capturar todos los patrones markdown
+    const markdownRegex = /(\*\*\*|___)([^*_]+?)\1|(\*\*|__)([^*_]+?)\3|(\*|_)([^*_]+?)\5/g;
+    
+    let match;
+    while ((match = markdownRegex.exec(text)) !== null) {
+      // Agregar texto antes del match
+      if (match.index > currentIndex) {
+        parts.push({
+          type: 'text',
+          content: text.substring(currentIndex, match.index)
+        });
+      }
+      
+      // Determinar el tipo de formato
+      if (match[1]) {
+        // Negrita + Cursiva (*** o ___)
+        parts.push({
+          type: 'boldItalic',
+          content: match[2]
+        });
+      } else if (match[3]) {
+        // Negrita (** o __)
+        parts.push({
+          type: 'bold',
+          content: match[4]
+        });
+      } else if (match[5]) {
+        // Cursiva (* o _)
+        parts.push({
+          type: 'italic',
+          content: match[6]
+        });
+      }
+      
+      currentIndex = match.index + match[0].length;
+    }
+    
+    // Agregar texto restante
+    if (currentIndex < text.length) {
+      parts.push({
+        type: 'text',
+        content: text.substring(currentIndex)
+      });
+    }
+    
+    // Si no hay partes, solo agregar el texto
+    if (parts.length === 0) {
+      container.appendText(text);
+      return;
+    }
+    
+    // Renderizar las partes
+    parts.forEach(part => {
+      if (part.type === 'text') {
+        container.appendText(part.content);
+      } else if (part.type === 'bold') {
+        const strong = container.createEl('strong');
+        strong.textContent = part.content;
+      } else if (part.type === 'italic') {
+        const em = container.createEl('em');
+        em.textContent = part.content;
+      } else if (part.type === 'boldItalic') {
+        const strong = container.createEl('strong');
+        const em = strong.createEl('em');
+        em.textContent = part.content;
       }
     });
   }
