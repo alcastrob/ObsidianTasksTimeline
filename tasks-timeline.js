@@ -2067,6 +2067,15 @@ class TasksTimeline {
     // Procesar el texto con markdown
     this.processTaskLinks(text, task.text);
 
+    // Insertar icono de estado al inicio del texto si corresponde
+    const statusIcon = this.getTaskStatusIcon(task.checkboxState || ' ');
+    if (statusIcon) {
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'task-status-icon';
+      iconSpan.textContent = statusIcon + ' ';
+      text.insertBefore(iconSpan, text.firstChild);
+    }
+
     const clearfix = taskContent.createDiv();
     clearfix.style.clear = 'both';
 
@@ -2108,6 +2117,7 @@ class TasksTimeline {
         fullLine: task.fullLine,
         text: task.text,
         taskId: taskId,
+        checkboxState: task.checkboxState || ' ',
       };
       e.dataTransfer.setData('application/x-obsidian-task', JSON.stringify(taskData));
       e.dataTransfer.effectAllowed = 'move';
@@ -3133,6 +3143,7 @@ class TasksTimeline {
         fullLine: updatedFullLine,
         completed: false,
         cancelled: false,
+        checkboxState: taskData.checkboxState || ' ',
       };
 
       this.insertTaskByPriority(dropZone, taskInfo);

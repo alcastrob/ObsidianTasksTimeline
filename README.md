@@ -1,6 +1,6 @@
 # Tasks Timeline - Gestor Kanban para Obsidian Tasks
 
-**Versión:** 2.1  
+**Versión:** 2.3
 **Compatibilidad:** Obsidian con plugins Dataview y Tasks  
 **Tamaño:** 109KB (archivo único)
 
@@ -52,7 +52,7 @@ await dv.view("tasks-timeline", {filter: "Proyectos/", daysView: "nextWeek"})
 
 - ⚪ No comenzadas `[ ]`
 - 🔄 En curso `[/]`
-- ⏸️ En espera `[w]`
+- ⏳ En espera `[w]`
 - 👤 Delegadas `[d]`
 - ✅ Completadas `[x]`
 - ✖ Canceladas `[-]`
@@ -69,6 +69,7 @@ await dv.view("tasks-timeline", {filter: "Proyectos/", daysView: "nextWeek"})
 
 - ✖ Cancelar tarea
 - ⚫ Selector de prioridad (dropdown)
+- 🔄 Selector de estado (dropdown)
 - ☐ Checkbox completar/descompletar
 - 🎯 Drag & drop entre columnas
 
@@ -277,7 +278,20 @@ Crea `.obsidian/snippets/tasks-timeline-custom.css`:
 
 ## 📜 Changelog
 
-### v2.1 (Actual)
+### v2.3 (Actual)
+- ✨ Negritas, cursivas y enlaces web en el panel kanban
+- ✨ La columna "Retrasadas" acepta drag & drop
+- ✨ Checkbox para activar/desactivar columna de tareas retrasadas
+- 🔧 Refactorización del código del panel kanban
+- 🐛 Fix: icono de estado visible al arrastrar tareas entre columnas
+- 🐛 Fix: icono de estado visible en el texto de la tarea
+
+### v2.2
+- ✨ Selector de estado por tarea (dropdown)
+- ✨ Icono de estado visible en el texto de la tarea (🔄 ⏳ 👤)
+- 🔧 Código refactorizado
+
+### v2.1
 - ✨ Modo `nextWeek` para planificación semanal
 - ✨ Oculta dropdown "Columnas" en modo nextWeek
 - 🐛 Fix: objeto file para compatibilidad
@@ -335,4 +349,4 @@ Código abierto y gratuito para uso personal y comercial.
 
 **Desarrollado con ❤️ para la comunidad de Obsidian**
 
-*Noviembre 2024 - v2.1 - 109KB - Sin dependencias*
+*Marzo 2026 - v2.3 - Sin dependencias*
