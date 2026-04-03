@@ -2130,7 +2130,7 @@ class TasksTimeline {
   }
 
   processTaskLinks(textElement, taskText) {
-    const taskLinkRegex = /(⛓|🆔)\s*([a-zA-Z0-9,]+)/g;
+    const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9,]+)/g;
     const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
     const markdownLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
     const tagRegex = /#[\w\-áéíóúñü]+/gi;
@@ -2177,7 +2177,7 @@ class TasksTimeline {
       });
     }
 
-    const taskLinkEmojiRegex = /[⛓🆔]/g;
+    const taskLinkEmojiRegex = /[⛔🆔]/g;
     let lastTaskLinkPos = -1;
     let taskLinkMatch;
     while ((taskLinkMatch = taskLinkEmojiRegex.exec(taskText)) !== null) {
@@ -2434,9 +2434,9 @@ class TasksTimeline {
     overlay.id = 'task-overlay-' + Date.now();
 
     const header = overlay.createDiv('task-overlay-header');
-    if (linkType === '⛓') {
+    if (linkType === '⛔') {
       header.textContent =
-        allLinkedTasks.length > 1 ? `⛓ Tareas bloqueantes (${allLinkedTasks.length})` : '⛓ Tarea bloqueante';
+        allLinkedTasks.length > 1 ? `⛔ Tareas bloqueantes (${allLinkedTasks.length})` : '⛔ Tarea bloqueante';
     } else {
       header.textContent =
         allLinkedTasks.length > 1 ? `🆔 Tareas dependientes (${allLinkedTasks.length})` : '🆔 Tarea dependiente';
@@ -2535,7 +2535,7 @@ class TasksTimeline {
       files = files.filter((f) => f.path.startsWith(this.config.filter));
     }
 
-    const searchPattern = linkType === '⛓' ? '🆔' : '⛓';
+    const searchPattern = linkType === '⛔' ? '🆔' : '⛔';
     const foundTasks = [];
 
     for (const file of files) {
@@ -2557,7 +2557,7 @@ class TasksTimeline {
             if (ids.includes(taskId)) {
               let taskText = line
                 .replace(/^[\s]*[-*]\s+\[[x\- \/wd]\]/u, '')
-                .replace(/[⛓🆔]\s*[a-zA-Z0-9,]+/gu, '')
+                .replace(/[⛔🆔]\s*[a-zA-Z0-9,]+/gu, '')
                 .replace(/[📅🗓️⏳🛫🛬✅]\s*\d{4}-\d{2}-\d{2}/gu, '')
                 .replace(/[🔺⏫🔼🔽⬇]/gu, '')
                 .replace(/[🔁♻️]/gu, '')
@@ -2575,7 +2575,7 @@ class TasksTimeline {
                 fullLine: line,
               };
 
-              if (linkType === '⛓') {
+              if (linkType === '⛔') {
                 return [taskInfo];
               }
 
