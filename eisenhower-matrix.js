@@ -598,11 +598,13 @@ class EisenhowerMatrix {
     // Filtro de búsqueda
     if (this.filters.searchText) {
       const searchLower = this.filters.searchText.toLowerCase();
+      const negate = searchLower.startsWith('-') && searchLower.length > 1;
+      const term = negate ? searchLower.slice(1) : searchLower;
       filtered = filtered.filter((task) => {
-        return (
-          task.text.toLowerCase().includes(searchLower) ||
-          task.tags.some((tag) => tag.toLowerCase().includes(searchLower))
-        );
+        const matches =
+          task.text.toLowerCase().includes(term) ||
+          task.tags.some((tag) => tag.toLowerCase().includes(term));
+        return negate ? !matches : matches;
       });
     }
 

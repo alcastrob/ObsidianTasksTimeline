@@ -1,6 +1,6 @@
 # Tasks Timeline - Gestor Kanban para Obsidian Tasks
 
-**Versión:** 2.3
+**Versión:** 2.4
 **Compatibilidad:** Obsidian con plugins Dataview y Tasks  
 **Tamaño:** 109KB (archivo único)
 
@@ -60,7 +60,7 @@ await dv.view("tasks-timeline", {filter: "Proyectos/", daysView: "nextWeek"})
 ### 🎛️ Controles y Filtros
 
 - 🔍 **Control de Zoom**: 50% - 150% (se guarda automáticamente)
-- 🔎 **Búsqueda en Tiempo Real**: Filtrado instantáneo con debounce
+- 🔎 **Búsqueda en Tiempo Real**: Filtrado instantáneo con debounce. Usa `-término` para excluir tareas que contengan ese texto
 - 📋 **Dropdown de Columnas**: Mostrar/ocultar columnas específicas
 - 🏷️ **Dropdown de Estados**: Filtrar por estado de tarea
 - 🔄 **Botón Refrescar**: Actualización manual
@@ -296,6 +296,10 @@ Crea `.obsidian/snippets/tasks-timeline-custom.css`:
 - ✨ Oculta dropdown "Columnas" en modo nextWeek
 - 🐛 Fix: objeto file para compatibilidad
 - 📝 README completo
+
+### v2.4
+
+- ✨ Búsqueda con exclusión: prefijo `-término` oculta las tareas que contienen ese texto
 
 ### v2.0
 - 🎨 Rediseño completo

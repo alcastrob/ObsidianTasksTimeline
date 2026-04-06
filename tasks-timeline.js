@@ -1200,7 +1200,11 @@ class TasksTimeline {
     if (!this.filters.searchText || this.filters.searchText.trim() === '') {
       return true;
     }
-    return taskText.toLowerCase().includes(this.filters.searchText);
+    const search = this.filters.searchText;
+    if (search.startsWith('-') && search.length > 1) {
+      return !taskText.toLowerCase().includes(search.slice(1));
+    }
+    return taskText.toLowerCase().includes(search);
   }
 
   comparePriority(lineA, lineB) {
@@ -1778,7 +1782,10 @@ class TasksTimeline {
       const taskLine = taskItem.getAttribute('data-task-line') || '';
       const taskText = taskLine.toLowerCase();
 
-      const matchesSearch = !searchText || taskText.includes(searchText);
+      const _st = this.filters.searchText;
+      const _negate = _st && _st.startsWith('-') && _st.length > 1;
+      const _term = _negate ? _st.slice(1) : _st;
+      const matchesSearch = !_st || (_negate ? !taskText.includes(_term) : taskText.includes(_term));
 
       if (matchesSearch) {
         taskItem.style.display = '';
@@ -1788,7 +1795,11 @@ class TasksTimeline {
         taskItem.style.opacity = '0';
         taskItem.style.transform = 'translateX(-10px)';
         setTimeout(() => {
-          if (!taskText.includes(this.filters.searchText)) {
+          const _st2 = this.filters.searchText;
+          const _negate2 = _st2 && _st2.startsWith('-') && _st2.length > 1;
+          const _term2 = _negate2 ? _st2.slice(1) : _st2;
+          const stillHidden = _st2 && (_negate2 ? taskText.includes(_term2) : !taskText.includes(_term2));
+          if (stillHidden) {
             taskItem.style.display = 'none';
           }
         }, 200);
@@ -1836,7 +1847,10 @@ class TasksTimeline {
 
       if (shouldShow && this.filters.searchText) {
         const taskLine = taskItem.getAttribute('data-task-line') || '';
-        shouldShow = taskLine.toLowerCase().includes(this.filters.searchText);
+        const _st3 = this.filters.searchText;
+        const _negate3 = _st3.startsWith('-') && _st3.length > 1;
+        const _term3 = _negate3 ? _st3.slice(1) : _st3;
+        shouldShow = _negate3 ? !taskLine.toLowerCase().includes(_term3) : taskLine.toLowerCase().includes(_term3);
       }
 
       if (shouldShow) {
