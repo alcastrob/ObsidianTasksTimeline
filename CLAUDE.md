@@ -19,7 +19,7 @@ Ambos scripts se ejecutan dentro de Obsidian mediante la API `dv.view()` del plu
 - **No eliminar código que aparente estar duplicado o sin usar.** Es muy probable que haya sido añadido intencionalmente para cubrir una funcionalidad específica pedida en el pasado. Antes de borrar cualquier bloque, preguntar al usuario.
 - **No aprovechar el contexto de un cambio para "mejorar" otras partes del fichero.** Cada modificación debe tener el menor radio de impacto posible.
 - **Modificar el fichero README.md con los cambios que te solicite y cambiar el número de versión**.
-- **Ejecutar las pruebas unitarias existentes**. Cuando hagas cualquier cambio del código, asegúrate de ejecutar las pruebas unitarias existentes y que todas den OK.
+- **Crear tests unitarios para cada nueva funcionalidad** y ejecutar `npx jest` antes de hacer commit. Todos los tests (los nuevos y los existentes) deben pasar. No hacer commit de un cambio funcional sin su suite de tests correspondiente.
 
 ## Normas de despliegue en git
 
