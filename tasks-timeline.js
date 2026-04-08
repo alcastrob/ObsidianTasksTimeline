@@ -206,17 +206,25 @@ if (!document.getElementById(cssId)) {
 }
 
 .task-checkbox {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    margin-top: 2px;
-    margin-right: 8px;
     float: left;
+    margin-top: 1px;
+    margin-right: 8px;
+    cursor: pointer !important;
+    background: none !important;
+    border: none !important;
+    padding: 0 !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+    color: var(--text-muted) !important;
+    pointer-events: all !important;
+    position: relative !important;
+    z-index: 50 !important;
+    user-select: none !important;
+    -webkit-user-drag: none !important;
 }
 
-/* Usar los estilos nativos del tema de Obsidian para los checkboxes */
-.task-list-item-checkbox {
-    cursor: pointer;
+.task-checkbox:hover {
+    color: var(--interactive-accent) !important;
 }
 
 .task-text {
@@ -2028,38 +2036,24 @@ class TasksTimeline {
     const statusSelector = actions.createDiv('task-status-selector');
     this.createStatusSelector(statusSelector, task, taskEl);
 
-    // Crear checkbox como lo haría Obsidian en una lista de tareas
-    const checkboxLi = taskContent.createEl('li', { cls: 'task-list-item' });
-    checkboxLi.style.cssText = 'list-style: none; float: left; margin: 0; padding: 0; margin-right: 8px; margin-top: 2px;';
-    
-    const checkbox = checkboxLi.createEl('input', { 
-      type: 'checkbox',
-      cls: 'task-list-item-checkbox'
+    // Checkbox (botón para evitar conflicto con drag del padre)
+    const checkbox = taskContent.createEl('button', {
+      cls: 'task-checkbox',
     });
-    
-    checkbox.checked = task.completed;
-    
-    // Configurar el checkbox según el estado para que el tema lo estilice
-    const checkboxState = task.checkboxState || ' ';
-    if (checkboxState === '/') {
-      checkbox.setAttribute('data-task', '/');
-    } else if (checkboxState === 'w') {
-      checkbox.setAttribute('data-task', 'w');
-    } else if (checkboxState === 'd') {
-      checkbox.setAttribute('data-task', 'd');
-    } else if (checkboxState === '-') {
-      checkbox.setAttribute('data-task', '-');
-    } else if (checkboxState === 'x') {
-      checkbox.setAttribute('data-task', 'x');
-    } else {
-      checkbox.setAttribute('data-task', ' ');
-    }
-    
-    checkbox.addEventListener('change', async (e) => {
+    checkbox.setAttribute('type', 'button');
+    checkbox.setAttribute('draggable', 'false');
+    checkbox.setAttribute('aria-checked', task.completed ? 'true' : 'false');
+    checkbox.textContent = task.completed ? '☑' : '☐';
+    checkbox.style.webkitUserDrag = 'none';
+    checkbox.addEventListener('pointerdown', (e) => e.stopPropagation());
+    checkbox.addEventListener('pointerup', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const nowChecked = checkbox.getAttribute('aria-checked') !== 'true';
       const scrollPos = this.container.querySelector('.timeline-main')?.scrollLeft || 0;
-      await this.toggleTaskComplete(task, e.target.checked);
+      await this.toggleTaskComplete(task, nowChecked);
 
-      if (e.target.checked) {
+      if (nowChecked) {
         taskEl.style.opacity = '0';
         taskEl.style.transform = 'translateX(20px)';
         setTimeout(() => {
@@ -2069,6 +2063,9 @@ class TasksTimeline {
           const timelineMain = this.container.querySelector('.timeline-main');
           if (timelineMain) timelineMain.scrollLeft = scrollPos;
         }, 300);
+      } else {
+        checkbox.setAttribute('aria-checked', 'false');
+        checkbox.textContent = '☐';
       }
     });
 
