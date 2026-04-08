@@ -3,7 +3,7 @@
  * Gestión de tareas basada en la matriz de Eisenhower (Urgente/Importante)
  * Compatible con Obsidian Tasks plugin
  *
- * @version 1.0.0
+ * @version 1.0.1
  * @author Ángel
  */
 
@@ -2749,6 +2749,7 @@ class EisenhowerMatrix {
                 margin-top: 3px;
                 margin-right: 10px;
                 cursor: pointer;
+                pointer-events: auto;
             }
 
             .task-text {

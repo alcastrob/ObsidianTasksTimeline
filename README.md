@@ -278,7 +278,10 @@ Crea `.obsidian/snippets/tasks-timeline-custom.css`:
 
 ## 📜 Changelog
 
-### v2.3 (Actual)
+### v2.3 (Actual) — Eisenhower v1.0.1
+- 🐛 Fix: checkbox de completar tarea en panel Eisenhower no respondía a clics (pointer-events bloqueados por CSS de Obsidian)
+
+### v2.3
 - ✨ Negritas, cursivas y enlaces web en el panel kanban
 - ✨ La columna "Retrasadas" acepta drag & drop
 - ✨ Checkbox para activar/desactivar columna de tareas retrasadas
