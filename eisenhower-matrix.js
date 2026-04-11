@@ -3,7 +3,7 @@
  * Gestión de tareas basada en la matriz de Eisenhower (Urgente/Importante)
  * Compatible con Obsidian Tasks plugin
  *
- * @version 1.0.0
+ * @version 1.0.1
  * @author Ángel
  */
 
@@ -598,11 +598,13 @@ class EisenhowerMatrix {
     // Filtro de búsqueda
     if (this.filters.searchText) {
       const searchLower = this.filters.searchText.toLowerCase();
+      const negate = searchLower.startsWith('-') && searchLower.length > 1;
+      const term = negate ? searchLower.slice(1) : searchLower;
       filtered = filtered.filter((task) => {
-        return (
-          task.text.toLowerCase().includes(searchLower) ||
-          task.tags.some((tag) => tag.toLowerCase().includes(searchLower))
-        );
+        const matches =
+          task.text.toLowerCase().includes(term) ||
+          task.tags.some((tag) => tag.toLowerCase().includes(term));
+        return negate ? !matches : matches;
       });
     }
 
@@ -874,15 +876,22 @@ class EisenhowerMatrix {
     // Contenido de la tarea
     const taskContent = taskEl.createDiv({ cls: 'task-content-wrapper' });
 
-    // Checkbox
-    const checkbox = taskContent.createEl('input', {
-      type: 'checkbox',
+    // Checkbox (botón para evitar conflicto con drag del padre)
+    const checkbox = taskContent.createEl('button', {
       cls: 'task-checkbox',
     });
-    checkbox.checked = task.completed;
-    checkbox.addEventListener('change', async (e) => {
-      await this.toggleTaskComplete(task, e.target.checked);
-      if (e.target.checked) {
+    checkbox.setAttribute('type', 'button');
+    checkbox.setAttribute('draggable', 'false');
+    checkbox.setAttribute('aria-checked', task.completed ? 'true' : 'false');
+    checkbox.textContent = task.completed ? '☑' : '☐';
+    checkbox.style.webkitUserDrag = 'none';
+    checkbox.addEventListener('pointerdown', (e) => e.stopPropagation());
+    checkbox.addEventListener('pointerup', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const nowChecked = checkbox.getAttribute('aria-checked') !== 'true';
+      await this.toggleTaskComplete(task, nowChecked);
+      if (nowChecked) {
         taskEl.style.transition = 'all 0.3s ease-out';
         taskEl.style.opacity = '0';
         taskEl.style.transform = 'translateX(20px)';
@@ -890,6 +899,9 @@ class EisenhowerMatrix {
           taskEl.remove();
           this.updateQuadrantCounters();
         }, 300);
+      } else {
+        checkbox.setAttribute('aria-checked', 'false');
+        checkbox.textContent = '☐';
       }
     });
 
@@ -937,7 +949,7 @@ class EisenhowerMatrix {
     let currentIndex = 0;
 
     // Regex mejorados
-    const taskLinkRegex = /(⛓|🆔)\s*([a-zA-Z0-9,]+)/g; // Soporta múltiples IDs separados por comas
+    const taskLinkRegex = /(⛔|🆔)\s*([a-zA-Z0-9,]+)/g; // Soporta múltiples IDs separados por comas
     const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
     const tagRegex = /#[\w\-áéíóúñÑ]+/gi;
 
@@ -1843,8 +1855,16 @@ class EisenhowerMatrix {
 
       if (completed) {
         taskLine = taskLine.replace(/^\s*-\s*\[.\]/, '- [x]');
+        if (!/✅\s*\d{4}-\d{2}-\d{2}/.test(taskLine)) {
+          const today = new Date();
+          const dateStr = today.getFullYear() + '-' +
+            String(today.getMonth() + 1).padStart(2, '0') + '-' +
+            String(today.getDate()).padStart(2, '0');
+          taskLine = taskLine.trimEnd() + ' ✅ ' + dateStr;
+        }
       } else {
         taskLine = taskLine.replace(/^\s*-\s*\[x\]/, '- [ ]');
+        taskLine = taskLine.replace(/\s*✅\s*\d{4}-\d{2}-\d{2}/, '');
       }
 
       lines[task.line] = taskLine;
@@ -1951,9 +1971,9 @@ class EisenhowerMatrix {
     this.currentOverlay = overlay;
 
     const header = overlay.createDiv('task-overlay-header');
-    if (linkType === '⛓') {
+    if (linkType === '⛔') {
       header.textContent =
-        allLinkedTasks.length > 1 ? `⛓ Tareas bloqueantes (${allLinkedTasks.length})` : '⛓ Tarea bloqueante';
+        allLinkedTasks.length > 1 ? `⛔ Tareas bloqueantes (${allLinkedTasks.length})` : '⛔ Tarea bloqueante';
     } else {
       header.textContent =
         allLinkedTasks.length > 1 ? `🆔 Tareas dependientes (${allLinkedTasks.length})` : '🆔 Tarea dependiente';
@@ -2034,7 +2054,7 @@ class EisenhowerMatrix {
     }
 
     // Determinar qué patrón buscar según el tipo de enlace
-    const searchPattern = linkType === '⛓' ? '🆔' : '⛓';
+    const searchPattern = linkType === '⛔' ? '🆔' : '⛔';
 
     for (const file of files) {
       const content = await this.dv.app.vault.read(file);
@@ -2083,8 +2103,8 @@ class EisenhowerMatrix {
                 fullLine: line,
               };
 
-              // Si es ⛓ (before), solo devolver la primera tarea encontrada
-              if (linkType === '⛓') {
+              // Si es ⛔ (before), solo devolver la primera tarea encontrada
+              if (linkType === '⛔') {
                 return [taskInfo];
               }
 
@@ -2744,9 +2764,24 @@ class EisenhowerMatrix {
 
             .task-checkbox {
                 float: left;
-                margin-top: 3px;
-                margin-right: 10px;
-                cursor: pointer;
+                margin-top: 1px;
+                margin-right: 8px;
+                cursor: pointer !important;
+                background: none !important;
+                border: none !important;
+                padding: 0 !important;
+                font-size: 16px !important;
+                line-height: 1 !important;
+                color: var(--text-muted) !important;
+                pointer-events: all !important;
+                position: relative !important;
+                z-index: 50 !important;
+                user-select: none !important;
+                -webkit-user-drag: none !important;
+            }
+
+            .task-checkbox:hover {
+                color: var(--interactive-accent) !important;
             }
 
             .task-text {
